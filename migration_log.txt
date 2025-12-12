@@ -1,0 +1,25 @@
+Initialising login role...
+Connecting to remote database...
+Found local migration files to be inserted before the last migration on remote database.
+
+Rerun the command with --include-all flag to apply these migrations:
+supabase\migrations\0000_criar_tabela_de_perfis_com_rls_adequado.sql                                                                                      
+supabase\migrations\0001_criar_fun_o_para_inserir_perfil_e_tenant_quando_o_usu_rio_se_cadastra.sql                                                        
+supabase\migrations\0002_corrigindo_o_erro_relation_already_exists_adicionando_if_not_exists_s_cria_es_de_tabela_.sql                                     
+supabase\migrations\0003_corrigindo_o_trigger_para_chamar_a_fun_o_correta_que_cria_o_perfil_e_o_tenant_do_usu_rio_.sql                                    
+supabase\migrations\0004_removendo_pol_ticas_rls_problem_ticas_e_criando_novas_pol_ticas_seguras_para_perfis_e_tenants_.sql                               
+supabase\migrations\0005_renomeando_a_coluna_price_para_selling_price_na_tabela_products_.sql                                                             
+supabase\migrations\0006_garantindo_que_as_colunas_selling_price_cost_price_e_category_existam_e_estejam_configuradas_corretamente_na_tabela_products_.sql
+supabase\migrations\0007_adicionando_colunas_de_email_e_user_id_tabela_de_profissionais_.sql                                                              
+supabase\migrations\0008_adicionando_uma_coluna_role_tabela_de_perfis_para_gerenciar_permiss_es_.sql                                                      
+supabase\migrations\0009_adicionando_a_coluna_commission_percentage_tabela_professionals_com_um_valor_padr_o_de_0_.sql                                    
+supabase\migrations\0010_adicionando_colunas_total_amount_e_products_sold_tabela_appointments.sql                                                         
+supabase\migrations\0011_add_booking_window_days_to_tenants.sql                                                                                           
+supabase\migrations\0012_add_address_to_tenants.sql                                                                                                       
+supabase\migrations\0013_create_storage_bucket.sql                                                                                                        
+supabase\migrations\0014_enable_realtime.sql                                                                                                              
+supabase\migrations\0015_restrict_barber_access.sql                                                                                                       
+supabase\migrations\0016_fix_trigger_for_professionals.sql                                                                                                
+supabase\migrations\0017_create_stock_movements_table.sql                                                                                                 
+supabase\migrations\0018_create_transactions_and_commissions.sql                                                                                          
+
