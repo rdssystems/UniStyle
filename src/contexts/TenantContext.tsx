@@ -93,7 +93,39 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setTenant(prev => JSON.stringify(prev) === JSON.stringify(currentTenant) ? prev : currentTenant);
         } else {
             setUser(null);
-            setTenant(null);
+
+            // Check for tenant query param in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const tenantSlug = urlParams.get('tenant');
+
+            if (tenantSlug) {
+                const { data: tenantData, error: tenantError } = await supabase
+                    .from('tenants')
+                    .select('*')
+                    .eq('slug', tenantSlug)
+                    .single();
+
+                if (tenantError) {
+                    console.error('Erro ao buscar tenant público:', tenantError);
+                    setTenant(null);
+                } else {
+                    const currentTenant: Tenant = {
+                        id: tenantData.id,
+                        name: tenantData.name,
+                        slug: tenantData.slug,
+                        theme: {
+                            primaryColor: tenantData.primary_color,
+                            logoUrl: tenantData.logo_url,
+                            backgroundImageUrl: tenantData.background_image_url,
+                        },
+                        businessHours: tenantData.business_hours as BusinessHours,
+                        address: tenantData.address || (tenantData.business_hours as any)?.address,
+                    };
+                    setTenant(prev => JSON.stringify(prev) === JSON.stringify(currentTenant) ? prev : currentTenant);
+                }
+            } else {
+                setTenant(null);
+            }
         }
 
         if (!silent) {

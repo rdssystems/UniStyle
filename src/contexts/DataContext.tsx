@@ -70,7 +70,33 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             setServices(snakeToCamel(servicesData) as Service[]);
 
             let appointmentQuery = supabase.from('appointments').select('*').eq('tenant_id', currentTenantId);
-            if (user?.role === 'barber') {
+
+            // If user is not logged in (public view), use the secure RPC or skip fetching raw appointments if risk is too high.
+            // However, PublicBooking currently relies on 'appointments' state.
+            // We configured RLS to blocking anon from 'appointments' table select.
+            // So standard select will fail for anon. We must use RPC if no user.
+            if (!user) {
+                // Public View: Fetch using RPC for availability only
+                const { data: publicApps, error: publicAppsError } = await supabase.rpc('get_public_appointments', { p_tenant_id: currentTenantId });
+                if (publicAppsError) throw publicAppsError;
+
+                // Map to Appointment type (filling missing fields with safe defaults)
+                const mappedApps = (publicApps || []).map((app: any) => ({
+                    id: app.id,
+                    tenantId: currentTenantId,
+                    clientId: 'public', // Hidden
+                    professionalId: app.professional_id,
+                    serviceId: app.service_id,
+                    date: app.date,
+                    status: app.status,
+                    notes: '', // Hidden
+                    createdAt: new Date().toISOString(), // Dummy
+                    totalAmount: 0,
+                    productsSold: 0
+                }));
+                setAppointments(mappedApps as Appointment[]);
+            }
+            else if (user?.role === 'barber') {
                 const professional = (snakeToCamel(professionalsData) as Professional[]).find(p => p.userId === user.id);
                 if (professional) {
                     appointmentQuery = appointmentQuery.eq('professional_id', professional.id);
@@ -78,10 +104,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     setAppointments([]);
                 }
             }
-            const { data: appointmentsData, error: appointmentsError } = await appointmentQuery;
-
-            if (appointmentsError) throw appointmentsError;
-            setAppointments(snakeToCamel(appointmentsData) as Appointment[]);
+            if (user) {
+                const { data: appointmentsData, error: appointmentsError } = await appointmentQuery;
+                if (appointmentsError) throw appointmentsError;
+                setAppointments(snakeToCamel(appointmentsData) as Appointment[]);
+            }
 
             const { data: movementsData, error: movementsError } = await supabase.from('stock_movements').select('*').eq('tenant_id', currentTenantId).order('date', { ascending: false });
             if (movementsError) throw movementsError;
@@ -103,7 +130,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     useEffect(() => {
-        if (!isLoadingTenant && tenant?.id && user) {
+        if (!isLoadingTenant && tenant?.id) { // Allow fetch if tenant exists, even if user is null
             fetchTenantData(tenant.id);
 
             // Realtime Subscription
