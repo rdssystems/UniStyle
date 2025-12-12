@@ -104,7 +104,7 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const hexToRgb = (hex: string) => {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : '255 123 0'; // Default orange
+        return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : '79 70 229'; // Default Indigo
     };
 
     useEffect(() => {
@@ -112,7 +112,7 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const rgb = hexToRgb(tenant.theme.primaryColor);
             document.documentElement.style.setProperty('--primary-rgb', rgb);
         } else {
-            document.documentElement.style.setProperty('--primary-rgb', '255 123 0'); // Default
+            document.documentElement.style.setProperty('--primary-rgb', '79 70 229'); // Default Indigo
         }
     }, [tenant?.theme.primaryColor]);
 

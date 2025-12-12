@@ -33,7 +33,7 @@ const Login = () => {
                     <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-input-dark text-primary">
                         <span className="material-symbols-outlined !text-5xl">content_cut</span>
                     </div>
-                    <h1 className="text-3xl font-black uppercase tracking-wider text-text-primary-dark">IronBarber</h1>
+                    <h1 className="text-3xl font-black uppercase tracking-wider text-text-primary-dark">UniStyle</h1>
                 </div>
                 <div className="w-full">
                     <h2 className="pb-2 text-center text-3xl font-bold text-text-primary-dark">Bem-vindo de volta</h2>
@@ -49,15 +49,15 @@ const Login = () => {
                             variables: {
                                 default: {
                                     colors: {
-                                        brand: 'hsl(29 100% 50%)', // Cor primária do tema (primary)
-                                        brandAccent: 'hsl(29 100% 40%)', // Um pouco mais escuro para hover/active
+                                        brand: 'hsl(244 75% 60%)', // Cor primária do tema (primary) - Indigo Unisex
+                                        brandAccent: 'hsl(244 75% 50%)', // Um pouco mais escuro para hover/active
                                         inputBackground: 'hsl(240 4% 11%)', // input-dark
                                         inputBorder: 'hsl(240 3% 20%)', // border-dark
                                         inputPlaceholder: 'hsl(240 3% 53%)', // text-secondary-dark
                                         inputText: 'hsl(240 3% 92%)', // text-primary-dark
                                         messageBackground: 'hsl(240 4% 11%)', // card-dark
                                         messageText: 'hsl(240 3% 92%)', // text-primary-dark
-                                        messageActionText: 'hsl(29 100% 50%)', // primary
+                                        messageActionText: 'hsl(244 75% 60%)', // primary
                                     },
                                 },
                             },

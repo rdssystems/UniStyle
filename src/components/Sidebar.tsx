@@ -51,7 +51,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                                 )}
                             </div>
                             <div className="flex flex-col">
-                                <h1 className="text-text-primary-dark text-base font-bold uppercase tracking-wider">{tenant?.name || 'IronBarber'}</h1>
+                                <h1 className="text-text-primary-dark text-base font-bold uppercase tracking-wider">{tenant?.name || 'UniStyle'}</h1>
                                 <p className="text-text-secondary-dark text-xs">{user?.role === 'admin' ? 'Painel Admin' : 'Painel do Barbeiro'}</p>
                             </div>
                         </div>

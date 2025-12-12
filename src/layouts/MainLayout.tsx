@@ -22,7 +22,7 @@ const MainLayout = () => {
                                 <span className="material-symbols-outlined text-sm">content_cut</span>
                             )}
                         </div>
-                        <span className="font-bold text-text-primary-dark uppercase tracking-wider">{tenant?.name || 'IronBarber'}</span>
+                        <span className="font-bold text-text-primary-dark uppercase tracking-wider">{tenant?.name || 'UniStyle'}</span>
                     </div>
                     <button
                         onClick={() => setIsSidebarOpen(true)}
