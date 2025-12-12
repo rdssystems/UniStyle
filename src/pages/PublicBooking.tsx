@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Cookies from 'js-cookie';
-import { supabase } from '../integrations/supabase/client';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useTenant } from '../contexts/TenantContext';
 import { Professional, Service, Appointment, Client, DailyHours, DayOfWeek, PublicIdentificationResponse, PublicTokenVerificationResponse } from '../types';
@@ -15,15 +15,20 @@ const PublicBooking = () => {
     const [selectedTime, setSelectedTime] = useState<string>('');
     const [clientName, setClientName] = useState<string>('');
     const [clientPhone, setClientPhone] = useState<string>('');
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // Ensure URL has tenant param if logged in
     useEffect(() => {
-        if (tenant && !window.location.search.includes('tenant=')) {
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.set('tenant', tenant.slug);
-            window.history.replaceState({}, '', newUrl.toString());
+        if (tenant?.slug) {
+            const currentTenantParam = searchParams.get('tenant');
+            if (currentTenantParam !== tenant.slug) {
+                setSearchParams(prev => {
+                    prev.set('tenant', tenant.slug);
+                    return prev;
+                }, { replace: true });
+            }
         }
-    }, [tenant]);
+    }, [tenant, searchParams, setSearchParams]);
 
     // Auth State
     const [identificationStep, setIdentificationStep] = useState<'loading' | 'identify' | 'booking'>('loading');
