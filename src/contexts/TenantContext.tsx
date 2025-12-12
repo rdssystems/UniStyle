@@ -160,10 +160,9 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 const isSilent = event === 'TOKEN_REFRESHED' || hasLoadedRef.current;
                 fetchSessionAndData(isSilent);
             } else {
-                // Se não houver sessão (SIGNED_OUT ou INITIAL_SESSION sem usuário), para de carregar.
-                setUser(null);
-                setTenant(null);
-                setIsLoading(false);
+                // Se não houver sessão (SIGNED_OUT ou INITIAL_SESSION sem usuário), tentamos buscar via URL
+                // Chamamos fetchSessionAndData(false) que tem a lógica de fallback para URL
+                fetchSessionAndData(false);
             }
         });
 
@@ -190,12 +189,11 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const logout = async () => {
         setIsLoading(true);
         const { error } = await supabase.auth.signOut();
-        setIsLoading(false);
+        // O onAuthStateChange cuidará do resto
         if (error) {
             console.error('Erro ao fazer logout:', error.message);
+            setIsLoading(false);
         }
-        setUser(null);
-        setTenant(null);
     };
 
     const updateTenant = async (updates: Partial<Tenant>) => {

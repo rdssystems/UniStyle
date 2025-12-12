@@ -16,6 +16,15 @@ const PublicBooking = () => {
     const [clientName, setClientName] = useState<string>('');
     const [clientPhone, setClientPhone] = useState<string>('');
 
+    // Ensure URL has tenant param if logged in
+    useEffect(() => {
+        if (tenant && !window.location.search.includes('tenant=')) {
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.set('tenant', tenant.slug);
+            window.history.replaceState({}, '', newUrl.toString());
+        }
+    }, [tenant]);
+
     // Auth State
     const [identificationStep, setIdentificationStep] = useState<'loading' | 'identify' | 'booking'>('loading');
     const [authPhone, setAuthPhone] = useState('');
@@ -324,8 +333,19 @@ const PublicBooking = () => {
 
     if (!tenant) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-background-dark text-text-primary-dark">
-                Barbearia não encontrada ou carregando.
+            <div className="flex min-h-screen items-center justify-center bg-background-dark text-text-primary-dark p-8 text-center flex-col gap-4">
+                <span className="material-symbols-outlined text-6xl text-text-secondary-dark">store_off</span>
+                <h2 className="text-xl font-bold">Barbearia não encontrada</h2>
+                <p className="text-text-secondary-dark max-w-md">
+                    Parece que o link que você acessou está incompleto ou incorreto.
+                </p>
+                <div className="bg-input-dark p-4 rounded-lg text-sm text-left w-full max-w-md border border-border-dark">
+                    <p className="font-bold mb-2">Como acessar:</p>
+                    <p className="text-text-secondary-dark">Use o link fornecido pela barbearia, que deve se parecer com:</p>
+                    <code className="block mt-2 text-primary bg-background-dark p-2 rounded">
+                        /booking?tenant=nome-da-barbearia
+                    </code>
+                </div>
             </div>
         );
     }
@@ -431,10 +451,10 @@ const PublicBooking = () => {
                                         <div
                                             key={app.id}
                                             className={`p-4 rounded-lg border flex justify-between items-center ${isCompleted
-                                                    ? 'bg-card-dark/50 border-border-dark opacity-70 grayscale-[0.5]'
-                                                    : isCanceled
-                                                        ? 'bg-red-500/10 border-red-500/30 opacity-60'
-                                                        : 'bg-card-dark border-primary/30 shadow-glow-primary-sm'
+                                                ? 'bg-card-dark/50 border-border-dark opacity-70 grayscale-[0.5]'
+                                                : isCanceled
+                                                    ? 'bg-red-500/10 border-red-500/30 opacity-60'
+                                                    : 'bg-card-dark border-primary/30 shadow-glow-primary-sm'
                                                 }`}
                                         >
                                             <div className="flex flex-col gap-1">
