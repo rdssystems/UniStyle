@@ -64,7 +64,7 @@ const Products = () => {
                                 <span className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</span>
                                 <h3 className="font-bold text-lg text-text-primary-dark mt-1">{product.name}</h3>
                             </div>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark">
+                            <div className="flex gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); openEditModal(product); }}
                                     className="text-text-secondary-dark hover:text-primary p-1"

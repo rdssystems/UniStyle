@@ -4,6 +4,26 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useTenant } from '../contexts/TenantContext';
 import { Professional, Service, Appointment, Client, DailyHours, DayOfWeek, PublicIdentificationResponse, PublicTokenVerificationResponse } from '../types';
+import { supabase } from '../integrations/supabase/client'; // Importar o cliente Supabase
+
+// --- Helpers for Masking ---
+const maskCPF = (value: string) => {
+    return value
+        .replace(/\D/g, '') // Remove non-digits
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+        .replace(/(-\d{2})\d+?$/, '$1'); // Capture max length
+};
+
+const maskPhone = (value: string) => {
+    // Only numbers as requested for input, but let's just keep it clean or simple.
+    // User requested: "WhatsApp (somente números)... example 34900000000"
+    // So maybe no mask in the input? Or just clean it?
+    // Let's allow typing and just filter non-digits for the state.
+    return value.replace(/\D/g, '').slice(0, 11);
+};
+
 
 const PublicBooking = () => {
     const { tenant, isLoading: isLoadingTenant } = useTenant();
@@ -28,13 +48,15 @@ const PublicBooking = () => {
                 }, { replace: true });
             }
         }
-    }, [tenant, searchParams, setSearchParams]);
+    }, [tenant?.slug, searchParams, setSearchParams]);
 
     // Auth State
     const [identificationStep, setIdentificationStep] = useState<'loading' | 'identify' | 'booking'>('loading');
     const [authPhone, setAuthPhone] = useState('');
     const [authName, setAuthName] = useState('');
-    const [identifiedClient, setIdentifiedClient] = useState<{ id: string, name: string, phone: string } | null>(null);
+    const [authCpf, setAuthCpf] = useState('');
+    const [isRegistering, setIsRegistering] = useState(false); // Toggle between Login and Register
+    const [identifiedClient, setIdentifiedClient] = useState<{ id: string, name: string, phone: string, cpf?: string } | null>(null);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [isBookingSuccess, setIsBookingSuccess] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -171,18 +193,29 @@ const PublicBooking = () => {
         if (tenant) {
             verifyToken();
         }
-    }, [tenant]);
+    }, [tenant?.id]);
 
     const handleIdentification = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!tenant) return;
         setIsAuthenticating(true);
 
-        const { data, error } = await supabase.rpc('public_identify_client', {
+        // Limpar telefone (apenas números)
+        const cleanPhone = authPhone.replace(/\D/g, '');
+        const cleanCpf = authCpf.replace(/\D/g, '');
+
+
+
+        // If Login mode (not registering), we only send CPF.
+        // If the backend doesn't find it, it returns an error asking for phone (which effectively means "User not found, please register").
+        const payload = {
             p_tenant_id: tenant.id,
-            p_phone: authPhone || null,
-            p_name: authName || null
-        });
+            p_cpf: cleanCpf || null,
+            p_phone: isRegistering ? cleanPhone : null,
+            p_name: isRegistering ? authName : null
+        };
+
+        const { data, error } = await supabase.rpc('public_identify_client', payload);
 
         setIsAuthenticating(false);
 
@@ -201,10 +234,15 @@ const PublicBooking = () => {
             setClientPhone(response.client.phone);
             setIdentificationStep('booking');
         } else if (response.status === 'ambiguous') {
-            alert(response.message || 'Múltiplos clientes encontrados. Por favor, identifique-se pelo telefone.');
-            setAuthName(''); // Clear name to force phone usage or refinement
+            alert(response.message || 'Múltiplos clientes encontrados. Por favor, identifique-se pelo CPF ou Telefone.');
+            setAuthName(''); // Clear name to force phone/cpf usage
         } else {
-            alert(response.message || 'Erro desconhecido.');
+            // Handle specific error for missing phone (implies user needs to register)
+            if (response.message?.includes('Phone is required')) {
+                alert('CPF não encontrado. Por favor, clique em "Primeiro Acesso?" para se cadastrar.');
+            } else {
+                alert(response.message || 'Erro desconhecido.');
+            }
         }
     };
 
@@ -213,6 +251,9 @@ const PublicBooking = () => {
         setIdentifiedClient(null);
         setClientName('');
         setClientPhone('');
+        setAuthCpf('');
+        setAuthName('');
+        setAuthPhone('');
         setIdentificationStep('identify');
         // Reset booking form
         setSelectedProfessionalId('');
@@ -505,226 +546,294 @@ const PublicBooking = () => {
 
                 {identificationStep === 'identify' && (
                     <div className="w-full animate-in fade-in slide-in-from-bottom-4">
-                        <h2 className="text-xl font-bold text-text-primary-dark text-center mb-6">Identifique-se para continuar</h2>
-
-                        <form onSubmit={handleIdentification} className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-text-secondary-dark">Telefone (Recomendado)</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark">phone_iphone</span>
-                                    <input
-                                        type="tel"
-                                        placeholder="(XX) XXXXX-XXXX"
-                                        value={authPhone}
-                                        onChange={(e) => setAuthPhone(e.target.value)}
-                                        className="h-14 w-full rounded-lg bg-input-dark pl-12 pr-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    />
-                                </div>
+                        <div className="w-full max-w-sm mx-auto animate-fade-in relative z-10">
+                            <div className="text-center mb-8">
+                                <h2 className="text-2xl font-black text-text-primary-dark mb-2">
+                                    {isRegistering ? 'Crie sua conta' : 'Bem-vindo de volta!'}
+                                </h2>
+                                <p className="text-text-secondary-dark">
+                                    {isRegistering
+                                        ? 'Preencha seus dados para agendar.'
+                                        : 'Informe seu CPF para acessar.'}
+                                </p>
                             </div>
 
-                            <div className="relative flex items-center py-2">
-                                <div className="flex-grow border-t border-border-dark"></div>
-                                <span className="flex-shrink px-4 text-text-secondary-dark text-xs uppercase">Ou pelo nome</span>
-                                <div className="flex-grow border-t border-border-dark"></div>
-                            </div>
+                            <form onSubmit={handleIdentification} className="flex flex-col gap-5">
 
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-text-secondary-dark">Nome Completo</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark">person</span>
-                                    <input
-                                        type="text"
-                                        placeholder="Seu nome e sobrenome"
-                                        value={authName}
-                                        onChange={(e) => setAuthName(e.target.value)}
-                                        className="h-14 w-full rounded-lg bg-input-dark pl-12 pr-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    />
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={(!authPhone && !authName) || isAuthenticating}
-                                className="mt-4 w-full rounded-lg bg-primary py-4 text-lg font-bold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isAuthenticating ? 'Identificando...' : 'Continuar'}
-                            </button>
-                        </form>
-                    </div>
-                )}
-
-                {identificationStep === 'booking' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 w-full">
-                        <div className="flex items-center justify-between mb-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                                    {identifiedClient?.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-sm text-text-secondary-dark">Identificado como</span>
-                                    <span className="font-bold text-text-primary-dark">{identifiedClient?.name}</span>
-                                </div>
-                            </div>
-                            <button
-                                onClick={handleLogout}
-                                className="text-xs text-red-400 hover:text-red-300 underline"
-                            >
-                                Sair / Trocar
-                            </button>
-                        </div>
-                        {isBookingSuccess ? (
-                            <div className="text-center text-green-500 text-xl font-bold">
-                                <span className="material-symbols-outlined !text-6xl text-green-500 mb-4">check_circle</span>
-                                <p>Agendamento realizado com sucesso!</p>
-                                <p className="text-base text-text-secondary-dark mt-2">Aguardamos você!</p>
-                                <button
-                                    onClick={() => setIsBookingSuccess(false)}
-                                    className="mt-6 bg-primary text-background-dark px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"
-                                >
-                                    Fazer outro agendamento
-                                </button>
-                            </div>
-                        ) : (
-                            <form className="flex w-full flex-col gap-6" onSubmit={handleBooking}>
-                                {/* Professional Selection */}
+                                {/* CPF Input - Always Visible */}
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-medium text-text-secondary-dark" htmlFor="professional">Barbeiro</label>
-                                    {tenantProfessionals.length > 0 ? (
-                                        <select
-                                            id="professional"
-                                            className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                            value={selectedProfessionalId}
-                                            onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                                            required
-                                        >
-                                            <option value="">Selecione um barbeiro</option>
-                                            {tenantProfessionals.map(p => (
-                                                <option key={p.id} value={p.id}>{p.name}</option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
-                                            Nenhum barbeiro disponível. Por favor, entre em contato com o estabelecimento.
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Service Selection */}
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-medium text-text-secondary-dark" htmlFor="service">Serviço</label>
-                                    {tenantServices.length > 0 ? (
-                                        <select
-                                            id="service"
-                                            className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                            value={selectedServiceId}
-                                            onChange={(e) => setSelectedServiceId(e.target.value)}
-                                            required
-                                        >
-                                            <option value="">Selecione um serviço</option>
-                                            {tenantServices.map(s => (
-                                                <option key={s.id} value={s.id}>{s.title} - R$ {s.price.toFixed(2)} ({s.durationMinutes} min)</option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
-                                            Nenhum serviço disponível. Por favor, entre em contato com o estabelecimento.
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Date Selection */}
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-medium text-text-secondary-dark">Data</label>
-                                    <div className="flex gap-2 overflow-x-auto pb-2">
-                                        {datesToDisplay.map(date => {
-                                            const day = date.toLocaleDateString('pt-BR', { weekday: 'short' });
-                                            const dayNum = date.getDate();
-                                            const month = date.toLocaleDateString('pt-BR', { month: 'short' });
-                                            const isSelected = selectedDate.toDateString() === date.toDateString();
-                                            const businessHours = getBusinessHoursForDay(date);
-                                            const isClosed = businessHours?.isClosed;
-
-                                            return (
-                                                <button
-                                                    key={date.toISOString()}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (!isClosed) {
-                                                            setSelectedDate(date);
-                                                            setSelectedTime(''); // Reset time when date changes
-                                                        }
-                                                    }}
-                                                    className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-200 min-w-[80px] ${isSelected
-                                                        ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
-                                                        : isClosed
-                                                            ? 'bg-gray-700 text-gray-400 border-gray-600 cursor-not-allowed opacity-70'
-                                                            : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
-                                                        }`}
-                                                    disabled={isClosed}
-                                                >
-                                                    <span className="text-xs uppercase">{day.replace('.', '')}</span>
-                                                    <span className="text-xl font-bold">{dayNum}</span>
-                                                    <span className="text-xs uppercase">{month.replace('.', '')}</span>
-                                                    {isClosed && <span className="text-[10px] mt-1 text-red-400">Fechado</span>}
-                                                </button>
-                                            );
-                                        })}
+                                    <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">CPF</label>
+                                    <div className="relative group">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">badge</span>
+                                        <input
+                                            type="text"
+                                            placeholder="000.000.000-00"
+                                            value={authCpf}
+                                            onChange={(e) => setAuthCpf(maskCPF(e.target.value))}
+                                            maxLength={14}
+                                            className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                        />
                                     </div>
+                                    <p className="text-xs text-text-secondary-dark/70 text-center">
+                                        {isRegistering ? 'Usado para identificar você unicamente.' : 'Digite apenas os números.'}
+                                    </p>
                                 </div>
 
-                                {/* Time Selection */}
-                                {selectedProfessionalId && selectedServiceId && selectedDate && (
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-text-secondary-dark">Horário</label>
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                            {generateTimeSlots.length > 0 ? (
-                                                generateTimeSlots.map(({ time, available }) => (
-                                                    <button
-                                                        key={time}
-                                                        type="button"
-                                                        onClick={() => available && setSelectedTime(time)}
-                                                        disabled={!available}
-                                                        className={`px-4 py-2 rounded-lg border transition-all duration-200 ${!available
-                                                            ? 'bg-input-dark/50 text-text-secondary-dark border-border-dark/50 cursor-not-allowed opacity-50 decoration-slice'
-                                                            : selectedTime === time
-                                                                ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
-                                                                : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
-                                                            }`}
-                                                    >
-                                                        {time}
-                                                    </button>
-                                                ))
-                                            ) : (
-                                                <p className="col-span-full text-center text-text-secondary-dark py-4">
-                                                    Nenhum horário disponível para esta data e serviço.
-                                                </p>
-                                            )}
+                                {/* Register Fields - Only show if registering */}
+                                {isRegistering && (
+                                    <div className="flex flex-col gap-5 animate-fade-in">
+                                        {/* Name Input */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">Nome Completo</label>
+                                            <div className="relative group">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">person</span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Seu nome"
+                                                    value={authName}
+                                                    onChange={(e) => setAuthName(e.target.value)}
+                                                    className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* WhatsApp Input */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">WhatsApp</label>
+                                            <div className="relative group">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">phone_iphone</span>
+                                                <input
+                                                    type="tel"
+                                                    placeholder="34999999999"
+                                                    value={authPhone}
+                                                    onChange={(e) => setAuthPhone(maskPhone(e.target.value))}
+                                                    className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                                />
+                                            </div>
+                                            <p className="text-xs text-text-secondary-dark/70 text-center">Somente números, ex: 11999999999</p>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Client Information - Omitted as we have identifiedClient */}
-                                {/* We can still allow editing email if needed, or confirming details */}
-                                {/* For now, simplified: we use the identified info. */}
-
-
-
-
-                                <div className="mt-4 flex flex-col items-center gap-4">
-                                    <button
-                                        className="w-full rounded-lg bg-primary py-4 text-lg font-bold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] hover:shadow-glow-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-card-dark disabled:opacity-50 disabled:cursor-not-allowed"
-                                        type="submit"
-                                        disabled={isSubmitting || !selectedProfessionalId || !selectedServiceId || !selectedDate || !selectedTime}
-                                    >
-                                        {isSubmitting ? 'Agendando...' : 'Confirmar Agendamento'}
-                                    </button>
-                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={!authCpf || isAuthenticating || (isRegistering && (!authName || !authPhone))}
+                                    className="mt-2 w-full rounded-xl bg-primary py-4 text-lg font-black text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 uppercase tracking-wide"
+                                >
+                                    {isAuthenticating ? (
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+                                            <span>Processando...</span>
+                                        </div>
+                                    ) : (
+                                        isRegistering ? 'Concluir Cadastro' : 'Entrar'
+                                    )}
+                                </button>
                             </form>
-                        )}
+
+                            <div className="mt-8 pt-6 border-t border-border-dark text-center">
+                                {isRegistering ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsRegistering(false);
+                                        }}
+                                        className="text-text-primary-dark hover:text-primary font-medium transition-colors text-sm flex items-center justify-center gap-2 mx-auto"
+                                    >
+                                        <span className="material-symbols-outlined text-lg">arrow_back</span>
+                                        Já tenho cadastro
+                                    </button>
+                                ) : (
+                                    <div className="flex flex-col gap-2">
+                                        <p className="text-text-secondary-dark text-sm">Não tem cadastro?</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsRegistering(true)}
+                                            className="text-primary hover:text-primary-light font-bold transition-colors text-base flex items-center justify-center gap-1 mx-auto hover:underline decoration-2 underline-offset-4"
+                                        >
+                                            Primeiro Acesso? Clique aqui
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
-            </div>
-        </div>
+
+                {
+                    identificationStep === 'booking' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 w-full">
+                            <div className="flex items-center justify-between mb-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                                        {identifiedClient?.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm text-text-secondary-dark">Identificado como</span>
+                                        <span className="font-bold text-text-primary-dark">{identifiedClient?.name}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleLogout}
+                                    className="text-xs text-red-400 hover:text-red-300 underline"
+                                >
+                                    Sair / Trocar
+                                </button>
+                            </div>
+                            {isBookingSuccess ? (
+                                <div className="text-center text-green-500 text-xl font-bold">
+                                    <span className="material-symbols-outlined !text-6xl text-green-500 mb-4">check_circle</span>
+                                    <p>Agendamento realizado com sucesso!</p>
+                                    <p className="text-base text-text-secondary-dark mt-2">Aguardamos você!</p>
+                                    <button
+                                        onClick={() => setIsBookingSuccess(false)}
+                                        className="mt-6 bg-primary text-background-dark px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"
+                                    >
+                                        Fazer outro agendamento
+                                    </button>
+                                </div>
+                            ) : (
+                                <form className="flex w-full flex-col gap-6" onSubmit={handleBooking}>
+                                    {/* Professional Selection */}
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-sm font-medium text-text-secondary-dark" htmlFor="professional">Barbeiro</label>
+                                        {tenantProfessionals.length > 0 ? (
+                                            <select
+                                                id="professional"
+                                                className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                value={selectedProfessionalId}
+                                                onChange={(e) => setSelectedProfessionalId(e.target.value)}
+                                                required
+                                            >
+                                                <option value="">Selecione um barbeiro</option>
+                                                {tenantProfessionals.map(p => (
+                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
+                                                Nenhum barbeiro disponível. Por favor, entre em contato com o estabelecimento.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Service Selection */}
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-sm font-medium text-text-secondary-dark" htmlFor="service">Serviço</label>
+                                        {tenantServices.length > 0 ? (
+                                            <select
+                                                id="service"
+                                                className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                value={selectedServiceId}
+                                                onChange={(e) => setSelectedServiceId(e.target.value)}
+                                                required
+                                            >
+                                                <option value="">Selecione um serviço</option>
+                                                {tenantServices.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.title} - R$ {s.price.toFixed(2)} ({s.durationMinutes} min)</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
+                                                Nenhum serviço disponível. Por favor, entre em contato com o estabelecimento.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Date Selection */}
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-sm font-medium text-text-secondary-dark">Data</label>
+                                        <div className="flex gap-2 overflow-x-auto pb-2">
+                                            {datesToDisplay.map(date => {
+                                                const day = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+                                                const dayNum = date.getDate();
+                                                const month = date.toLocaleDateString('pt-BR', { month: 'short' });
+                                                const isSelected = selectedDate.toDateString() === date.toDateString();
+                                                const businessHours = getBusinessHoursForDay(date);
+                                                const isClosed = businessHours?.isClosed;
+
+                                                return (
+                                                    <button
+                                                        key={date.toISOString()}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!isClosed) {
+                                                                setSelectedDate(date);
+                                                                setSelectedTime(''); // Reset time when date changes
+                                                            }
+                                                        }}
+                                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-200 min-w-[80px] ${isSelected
+                                                            ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
+                                                            : isClosed
+                                                                ? 'bg-gray-700 text-gray-400 border-gray-600 cursor-not-allowed opacity-70'
+                                                                : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
+                                                            }`}
+                                                        disabled={isClosed}
+                                                    >
+                                                        <span className="text-xs uppercase">{day.replace('.', '')}</span>
+                                                        <span className="text-xl font-bold">{dayNum}</span>
+                                                        <span className="text-xs uppercase">{month.replace('.', '')}</span>
+                                                        {isClosed && <span className="text-[10px] mt-1 text-red-400">Fechado</span>}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Time Selection */}
+                                    {selectedProfessionalId && selectedServiceId && selectedDate && (
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-medium text-text-secondary-dark">Horário</label>
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                                {generateTimeSlots.length > 0 ? (
+                                                    generateTimeSlots.map(({ time, available }) => (
+                                                        <button
+                                                            key={time}
+                                                            type="button"
+                                                            onClick={() => available && setSelectedTime(time)}
+                                                            disabled={!available}
+                                                            className={`px-4 py-2 rounded-lg border transition-all duration-200 ${!available
+                                                                ? 'bg-input-dark/50 text-text-secondary-dark border-border-dark/50 cursor-not-allowed opacity-50 decoration-slice'
+                                                                : selectedTime === time
+                                                                    ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
+                                                                    : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
+                                                                }`}
+                                                        >
+                                                            {time}
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <p className="col-span-full text-center text-text-secondary-dark py-4">
+                                                        Nenhum horário disponível para esta data e serviço.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Client Information - Omitted as we have identifiedClient */}
+                                    {/* We can still allow editing email if needed, or confirming details */}
+                                    {/* For now, simplified: we use the identified info. */}
+
+
+
+
+                                    <div className="mt-4 flex flex-col items-center gap-4">
+                                        <button
+                                            className="w-full rounded-lg bg-primary py-4 text-lg font-bold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] hover:shadow-glow-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-card-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                                            type="submit"
+                                            disabled={isSubmitting || !selectedProfessionalId || !selectedServiceId || !selectedDate || !selectedTime}
+                                        >
+                                            {isSubmitting ? 'Agendando...' : 'Confirmar Agendamento'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
+                    )
+                }
+            </div >
+        </div >
     );
 };
 

@@ -168,28 +168,27 @@ const Clients = () => {
                             </div>
                             <div className="flex items-center gap-4">
                                 {/* Balance Actions */}
-                                {user?.role === 'admin' && (
-                                    <div className="hidden md:flex gap-2">
-                                        <button
-                                            onClick={() => openBalanceModal(client, 'credit')}
-                                            className="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-500 text-xs font-bold hover:bg-green-500/20 transition-colors flex items-center gap-1"
-                                            title="Adicionar Crédito"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">add_circle</span>
-                                            Crédito
-                                        </button>
-                                        <button
-                                            onClick={() => openBalanceModal(client, 'debit')}
-                                            className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold hover:bg-red-500/20 transition-colors flex items-center gap-1"
-                                            title="Registrar Débito"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">remove_circle</span>
-                                            Débito
-                                        </button>
-                                    </div>
-                                )}
+                                {/* Balance Actions - Visible on all screens, icon only on mobile */}
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => openBalanceModal(client, 'credit')}
+                                        className="px-2 sm:px-3 py-1.5 rounded-lg bg-green-500/10 text-green-500 text-xs font-bold hover:bg-green-500/20 transition-colors flex items-center gap-1"
+                                        title="Adicionar Crédito"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">add_circle</span>
+                                        <span className="hidden sm:inline">Crédito</span>
+                                    </button>
+                                    <button
+                                        onClick={() => openBalanceModal(client, 'debit')}
+                                        className="px-2 sm:px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold hover:bg-red-500/20 transition-colors flex items-center gap-1"
+                                        title="Registrar Débito"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">remove_circle</span>
+                                        <span className="hidden sm:inline">Débito</span>
+                                    </button>
+                                </div>
 
-                                <div className="text-right hidden sm:block">
+                                <div className="text-right">
                                     <div className="flex flex-col items-end gap-1">
                                         <span className={`px-2 py-1 rounded text-xs font-bold ${client.status === 'Ativo' ? 'bg-green-500/20 text-green-500' : client.status === 'Novo' ? 'bg-blue-500/20 text-blue-500' : 'bg-red-500/20 text-red-500'}`}>{client.status}</span>
 
@@ -198,7 +197,7 @@ const Clients = () => {
                                                 <span className="px-2 py-1 rounded text-xs font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
                                                     Mensalista
                                                 </span>
-                                                <span className="text-[10px] text-text-secondary-dark mt-0.5">
+                                                <span className="text-[10px] text-text-secondary-dark mt-0.5 hidden sm:block">
                                                     Vence em: {Math.ceil((new Date(client.mensalistaExpiraEm).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} dias
                                                 </span>
                                             </div>

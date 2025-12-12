@@ -31,17 +31,9 @@ const ProfessionalHistory: React.FC<ProfessionalHistoryProps> = ({ professionalI
         }
 
         const filteredAppointments = myAppointments.filter(a => new Date(a.date) >= startOfPeriod);
-        const filteredCommissions = myCommissions.filter(c => new Date(c.date) >= startOfPeriod);
 
-        const totalCommission = filteredCommissions.reduce((sum, c) => sum + c.amount, 0);
-        const totalAppointments = filteredAppointments.length;
 
-        // Ticket Médio
-        const completedApps = filteredAppointments.filter(a => a.status === 'Concluído');
-        const totalValue = completedApps.reduce((sum, a) => sum + (a.totalAmount || 0), 0);
-        const averageTicket = completedApps.length > 0 ? totalValue / completedApps.length : 0;
-
-        // Histórico
+        // Histórico (Calculated first to be source of truth for totals)
         const history = filteredAppointments
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .map(app => {
@@ -54,6 +46,15 @@ const ProfessionalHistory: React.FC<ProfessionalHistoryProps> = ({ professionalI
                     commissionStatus: commission?.status || 'N/A'
                 };
             });
+
+        // Calculate totals based on the history items (displayed rows)
+        const totalCommission = history.reduce((sum, item) => sum + item.commissionAmount, 0);
+        const totalAppointments = history.length;
+
+        // Ticket Médio
+        const completedApps = history.filter(a => a.status === 'Concluído');
+        const totalValue = completedApps.reduce((sum, a) => sum + (a.totalAmount || 0), 0);
+        const averageTicket = completedApps.length > 0 ? totalValue / completedApps.length : 0;
 
         return {
             totalCommission,

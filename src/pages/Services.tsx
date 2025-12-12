@@ -64,7 +64,7 @@ const Services = () => {
             <div className="flex justify-between items-start mb-4">
               <h3 className="font-bold text-lg text-text-primary-dark">{service.title}</h3>
               {user?.role === 'admin' && (
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark">
+                <div className="flex gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark">
                   <button
                     onClick={(e) => { e.stopPropagation(); openEditModal(service); }}
                     className="text-text-secondary-dark hover:text-primary p-1"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Professional } from '../types';
 import { useData } from '../contexts/DataContext';
 import { useTenant } from '../contexts/TenantContext';
+import { supabase } from '../integrations/supabase/client';
 
 interface ProfessionalModalProps {
     isOpen: boolean;
@@ -21,6 +22,7 @@ const ProfessionalModal: React.FC<ProfessionalModalProps> = ({ isOpen, onClose, 
     const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
     const [avatarUrl, setAvatarUrl] = useState('');
     const [commissionPercentage, setCommissionPercentage] = useState<string>('0'); // Novo estado para comissão
+    const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
         if (professionalToEdit) {
@@ -48,6 +50,37 @@ const ProfessionalModal: React.FC<ProfessionalModalProps> = ({ isOpen, onClose, 
                 ? prev.filter(s => s !== serviceTitle)
                 : [...prev, serviceTitle]
         );
+    };
+
+    const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!event.target.files || event.target.files.length === 0 || !tenant) {
+            return;
+        }
+
+        const file = event.target.files[0];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${tenant.id}/professionals/${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        setIsUploading(true);
+
+        const { error: uploadError } = await supabase.storage
+            .from('logos')
+            .upload(filePath, file);
+
+        if (uploadError) {
+            console.error('Error uploading avatar:', uploadError);
+            alert('Erro ao fazer upload do avatar.');
+            setIsUploading(false);
+            return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('logos')
+            .getPublicUrl(filePath);
+
+        setAvatarUrl(publicUrl);
+        setIsUploading(false);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -155,14 +188,44 @@ const ProfessionalModal: React.FC<ProfessionalModalProps> = ({ isOpen, onClose, 
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium text-text-secondary-dark">URL do Avatar (Opcional)</label>
-                        <input
-                            type="text"
-                            value={avatarUrl}
-                            onChange={(e) => setAvatarUrl(e.target.value)}
-                            className="h-12 rounded-lg bg-input-dark border border-border-dark px-4 text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                            placeholder="https://..."
-                        />
+                        <label className="text-sm font-medium text-text-secondary-dark">Avatar</label>
+                        <div className="flex items-center gap-4">
+                            <div className="h-16 w-16 rounded-full bg-input-dark overflow-hidden border border-border-dark flex items-center justify-center flex-shrink-0">
+                                {avatarUrl ? (
+                                    <img src={avatarUrl} alt="Avatar Preview" className="h-full w-full object-cover" />
+                                ) : (
+                                    <span className="material-symbols-outlined text-text-secondary-dark">person</span>
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleAvatarUpload}
+                                    className="block w-full text-sm text-text-secondary-dark
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-full file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-primary file:text-background-dark
+                                        hover:file:bg-primary/90
+                                        cursor-pointer"
+                                    disabled={isUploading}
+                                />
+                                <p className="text-xs text-text-secondary-dark mt-1">
+                                    {isUploading ? 'Enviando...' : 'Recomendado: JPG ou PNG quadrado.'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-2">
+                            <label className="text-xs font-medium text-text-secondary-dark mb-1 block">Ou cole a URL da imagem</label>
+                            <input
+                                type="text"
+                                value={avatarUrl}
+                                onChange={(e) => setAvatarUrl(e.target.value)}
+                                className="h-10 w-full rounded-lg bg-input-dark border border-border-dark px-3 text-sm text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                placeholder="https://..."
+                            />
+                        </div>
                     </div>
 
                     <div className="mt-4 flex gap-3">
@@ -175,7 +238,8 @@ const ProfessionalModal: React.FC<ProfessionalModalProps> = ({ isOpen, onClose, 
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 rounded-lg bg-primary py-3 font-bold text-background-dark hover:opacity-90 transition-opacity"
+                            disabled={isUploading}
+                            className="flex-1 rounded-lg bg-primary py-3 font-bold text-background-dark hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Salvar
                         </button>

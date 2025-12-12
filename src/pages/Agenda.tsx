@@ -193,12 +193,13 @@ const Agenda = () => {
                                                                 'border-primary'}`}
                                             >
                                                 {/* Left Section: Name & Service */}
-                                                <div className="flex items-center gap-4 overflow-hidden">
-                                                    <span className="font-bold text-text-primary-dark text-sm truncate min-w-[100px] max-w-[150px]">{getClientName(appointment.clientId)}</span>
+                                                {/* Left Section: Name & Service - Stack on mobile, row on desktop */}
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center sm:gap-4 overflow-hidden">
+                                                    <span className="font-bold text-text-primary-dark text-sm truncate max-w-[120px] sm:min-w-[100px] sm:max-w-[150px]">{getClientName(appointment.clientId)}</span>
 
                                                     <div className="h-4 w-px bg-border-dark/50 mx-2 hidden sm:block"></div>
 
-                                                    <span className="text-xs text-text-secondary-dark truncate max-w-[120px] hidden sm:block" title={getServiceName(appointment.serviceId)}>
+                                                    <span className="text-[10px] sm:text-xs text-text-secondary-dark truncate max-w-[120px]" title={getServiceName(appointment.serviceId)}>
                                                         {getServiceName(appointment.serviceId)}
                                                     </span>
                                                 </div>

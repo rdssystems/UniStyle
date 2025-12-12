@@ -11,15 +11,28 @@ interface ClientModalProps {
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, clientToEdit }) => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
+    const [cpf, setCpf] = useState(''); // Estado para CPF
     const [avatarUrl, setAvatarUrl] = useState('');
     const [isMensalista, setIsMensalista] = useState(false);
     const [mensalistaValor, setMensalistaValor] = useState('');
     const [mensalistaFormaPagamento, setMensalistaFormaPagamento] = useState('cash');
 
+    // Helper para máscara de CPF
+    const handleCpfChange = (value: string) => {
+        const numeric = value.replace(/\D/g, '');
+        const masked = numeric
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+            .replace(/(-\d{2})\d+?$/, '$1');
+        setCpf(masked);
+    };
+
     useEffect(() => {
         if (clientToEdit) {
             setName(clientToEdit.name);
             setPhone(clientToEdit.phone);
+            setCpf(clientToEdit.cpf || ''); // Carregar CPF do cliente
             setAvatarUrl(clientToEdit.avatarUrl || '');
             setIsMensalista(clientToEdit.isMensalista || false);
             setMensalistaValor(clientToEdit.mensalistaValor?.toString() || '');
@@ -27,6 +40,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, clie
         } else {
             setName('');
             setPhone('');
+            setCpf('');
             setAvatarUrl('');
             setIsMensalista(false);
             setMensalistaValor('');
@@ -41,6 +55,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, clie
         onSave({
             name,
             phone,
+            cpf: cpf.replace(/\D/g, ''), // Limpar máscara antes de salvar
             avatarUrl,
             isMensalista,
             mensalistaValor: isMensalista ? parseFloat(mensalistaValor) : undefined,
@@ -83,6 +98,18 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, clie
                             onChange={(e) => setPhone(e.target.value)}
                             className="h-12 rounded-lg bg-input-dark border border-border-dark px-4 text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                             placeholder="Ex: (11) 99999-9999"
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-text-secondary-dark">CPF (Opcional)</label>
+                        <input
+                            type="text"
+                            value={cpf}
+                            onChange={(e) => handleCpfChange(e.target.value)}
+                            className="h-12 rounded-lg bg-input-dark border border-border-dark px-4 text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                            placeholder="000.000.000-00"
+                            maxLength={14}
                         />
                     </div>
 

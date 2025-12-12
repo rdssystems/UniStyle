@@ -42,6 +42,7 @@ export interface Client {
   tenantId: string;
   name: string;
   phone: string;
+  cpf?: string; // NOVO CAMPO
   status: 'Ativo' | 'Novo' | 'Inadimplente';
   points: number;
   avatarUrl?: string | null;
@@ -155,6 +156,7 @@ export interface PublicIdentificationResponse {
     id: string;
     name: string;
     phone: string;
+    cpf?: string;
   };
 }
 
@@ -164,5 +166,6 @@ export interface PublicTokenVerificationResponse {
     id: string;
     name: string;
     phone: string;
+    cpf?: string;
   };
 }

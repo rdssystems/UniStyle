@@ -83,7 +83,7 @@ const Professionals = () => {
                             <p className="text-sm text-text-secondary-dark">{professional.status}</p>
 
                             {/* Actions Group */}
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark shadow-xl z-20">
+                            <div className="flex gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-card-dark p-1 rounded-lg border border-border-dark shadow-xl z-20">
                                 {user?.role === 'admin' && (
                                     <>
                                         <button
