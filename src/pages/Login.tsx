@@ -33,7 +33,7 @@ const Login = () => {
                     <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-input-dark text-primary">
                         <span className="material-symbols-outlined !text-5xl">content_cut</span>
                     </div>
-                    <h1 className="text-3xl font-black uppercase tracking-wider text-text-primary-dark">UniStyle</h1>
+                    <h1 className="text-3xl font-extrabold uppercase tracking-wider text-text-primary-dark">UniStyle</h1>
                 </div>
                 <div className="w-full">
                     <h2 className="pb-2 text-center text-3xl font-bold text-text-primary-dark">Bem-vindo de volta</h2>

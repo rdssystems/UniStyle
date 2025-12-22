@@ -82,11 +82,15 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 slug: tenantData.slug,
                 theme: {
                     primaryColor: tenantData.primary_color,
+                    sidebarColor: tenantData.sidebar_color,
+                    backgroundColor: tenantData.background_color,
                     logoUrl: tenantData.logo_url,
                     backgroundImageUrl: tenantData.background_image_url,
                 },
                 businessHours: tenantData.business_hours as BusinessHours,
                 address: tenantData.address || (tenantData.business_hours as any)?.address,
+                cancellationWindowMinutes: tenantData.cancellation_window_minutes,
+                allowBarberCheckout: tenantData.allow_barber_checkout ?? true,
             };
 
             // Avoid unnecessary state updates
@@ -115,11 +119,15 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                         slug: tenantData.slug,
                         theme: {
                             primaryColor: tenantData.primary_color,
+                            sidebarColor: tenantData.sidebar_color,
+                            backgroundColor: tenantData.background_color,
                             logoUrl: tenantData.logo_url,
                             backgroundImageUrl: tenantData.background_image_url,
                         },
                         businessHours: tenantData.business_hours as BusinessHours,
                         address: tenantData.address || (tenantData.business_hours as any)?.address,
+                        cancellationWindowMinutes: tenantData.cancellation_window_minutes,
+                        allowBarberCheckout: tenantData.allow_barber_checkout ?? true,
                     };
                     setTenant(prev => JSON.stringify(prev) === JSON.stringify(currentTenant) ? prev : currentTenant);
                 }
@@ -146,7 +154,25 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else {
             document.documentElement.style.setProperty('--primary-rgb', '79 70 229'); // Default Indigo
         }
-    }, [tenant?.theme.primaryColor]);
+
+        if (tenant?.theme.sidebarColor) {
+            document.documentElement.style.setProperty('--sidebar-color', tenant.theme.sidebarColor);
+        } else {
+            document.documentElement.style.setProperty('--sidebar-color', '#1E1E1E');
+        }
+
+        if (tenant?.theme.backgroundColor) {
+            document.documentElement.style.setProperty('--background-dark-color', tenant.theme.backgroundColor);
+            // Derive surface color (cards) from background (slightly lighter)
+            // For now just keep it same or let user define? User didn't ask for card color.
+            // I'll set surface-dark to be the same as background or slightly different.
+            // Let's use the background color for now to see.
+            document.documentElement.style.setProperty('--surface-dark-color', tenant.theme.backgroundColor);
+        } else {
+            document.documentElement.style.setProperty('--background-dark-color', '#121212');
+            document.documentElement.style.setProperty('--surface-dark-color', '#1E1E1E');
+        }
+    }, [tenant?.theme.primaryColor, tenant?.theme.sidebarColor, tenant?.theme.backgroundColor]);
 
     useEffect(() => {
         // Define o estado inicial como carregando. O listener irá resolver isso.
@@ -206,12 +232,16 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 name: updates.name,
                 slug: updates.slug,
                 primary_color: updates.theme?.primaryColor,
+                sidebar_color: updates.theme?.sidebarColor,
+                background_color: updates.theme?.backgroundColor,
                 logo_url: updates.theme?.logoUrl,
                 background_image_url: updates.theme?.backgroundImageUrl,
                 business_hours: {
                     ...updates.businessHours,
                     address: updates.address // Store address in business_hours JSONB
                 },
+                cancellation_window_minutes: updates.cancellationWindowMinutes,
+                allow_barber_checkout: updates.allowBarberCheckout
             })
             .eq('id', tenant.id)
             .select()
@@ -230,11 +260,15 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 slug: data.slug,
                 theme: {
                     primaryColor: data.primary_color,
+                    sidebarColor: data.sidebar_color,
+                    backgroundColor: data.background_color,
                     logoUrl: data.logo_url,
                     backgroundImageUrl: data.background_image_url,
                 },
                 businessHours: data.business_hours as BusinessHours,
                 address: data.address || (data.business_hours as any)?.address,
+                cancellationWindowMinutes: data.cancellation_window_minutes,
+                allowBarberCheckout: data.allow_barber_checkout ?? true,
             };
             setTenant(updatedTenant);
         }

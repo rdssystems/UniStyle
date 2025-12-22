@@ -17,17 +17,13 @@ const maskCPF = (value: string) => {
 };
 
 const maskPhone = (value: string) => {
-    // Only numbers as requested for input, but let's just keep it clean or simple.
-    // User requested: "WhatsApp (somente números)... example 34900000000"
-    // So maybe no mask in the input? Or just clean it?
-    // Let's allow typing and just filter non-digits for the state.
     return value.replace(/\D/g, '').slice(0, 11);
 };
 
 
 const PublicBooking = () => {
     const { tenant, isLoading: isLoadingTenant } = useTenant();
-    const { professionals, services, appointments, addAppointment, addClient, isLoadingData } = useData();
+    const { professionals, services, appointments, addAppointment, addClient, isLoadingData, refreshData } = useData();
 
     const [selectedProfessionalId, setSelectedProfessionalId] = useState<string>('');
     const [selectedServiceId, setSelectedServiceId] = useState<string>('');
@@ -35,7 +31,9 @@ const PublicBooking = () => {
     const [selectedTime, setSelectedTime] = useState<string>('');
     const [clientName, setClientName] = useState<string>('');
     const [clientPhone, setClientPhone] = useState<string>('');
+    const [currentProfessionalIndex, setCurrentProfessionalIndex] = useState(0);
     const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // Ensure URL has tenant param if logged in
     useEffect(() => {
@@ -69,6 +67,15 @@ const PublicBooking = () => {
     const tenantServices = services.filter(s => s.tenantId === tenant?.id);
     const tenantAppointments = appointments.filter(a => a.tenantId === tenant?.id);
 
+    // Update selectedProfessionalId when carousel index changes
+    useEffect(() => {
+        if (tenantProfessionals.length > 0 && identificationStep === 'booking') {
+            setSelectedProfessionalId(tenantProfessionals[currentProfessionalIndex]?.id || '');
+        }
+    }, [currentProfessionalIndex, tenantProfessionals, identificationStep]);
+
+
+
     const getDayOfWeek = (date: Date): DayOfWeek => {
         const days: DayOfWeek[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         return days[date.getDay()];
@@ -78,7 +85,6 @@ const PublicBooking = () => {
         if (!tenant?.businessHours) return undefined;
         const day = getDayOfWeek(date);
         const hours = tenant.businessHours[day];
-        // console.log(`Checking hours for ${date.toDateString()} (${day}):`, hours); // Debug log
         return hours;
     };
 
@@ -86,10 +92,10 @@ const PublicBooking = () => {
         if (!selectedProfessionalId || !selectedServiceId || !tenant || isLoadingData) return [];
 
         const service = tenantServices.find(s => s.id === selectedServiceId);
-        if (!service) return []; // No service found, no slots can be generated
+        if (!service) return [];
 
         const businessHours = getBusinessHoursForDay(selectedDate);
-        if (!businessHours || businessHours.isClosed) return []; // Day is closed or no business hours defined
+        if (!businessHours || businessHours.isClosed) return [];
 
         const slots: { time: string; available: boolean }[] = [];
         const [openHour, openMinute] = businessHours.open.split(':').map(Number);
@@ -101,16 +107,14 @@ const PublicBooking = () => {
         const closingTime = new Date(selectedDate);
         closingTime.setHours(closeHour, closeMinute, 0, 0);
 
-        // Ensure current time is not before now for today's date
         const now = new Date();
         if (selectedDate.toDateString() === now.toDateString() && currentTime.getTime() < now.getTime()) {
-            // Round up to the next half hour if current time is past now
             const currentMinutes = now.getMinutes();
-            const nextHalfHour = currentMinutes < 30 ? 30 : 60;
-            now.setMinutes(nextHalfHour, 0, 0);
-            if (now.getMinutes() === 0 && nextHalfHour === 60) { // If it rolled over to next hour
-                now.setHours(now.getHours() + 1);
-            }
+            const interval = 5;
+            const remainder = currentMinutes % interval;
+            const minutesToAdd = remainder === 0 ? 0 : interval - remainder;
+
+            now.setMinutes(currentMinutes + minutesToAdd, 0, 0);
             currentTime = now;
         }
 
@@ -124,10 +128,10 @@ const PublicBooking = () => {
                 const appService = tenantServices.find(s => s.id === app.serviceId);
                 const appEnd = new Date(appStart.getTime() + (appService?.durationMinutes || 0) * 60 * 1000);
 
-                // Check for overlap with existing appointments for the selected professional
                 return app.professionalId === selectedProfessionalId &&
+                    app.status !== 'Cancelado' &&
                     (
-                        (slotStart < appEnd && slotEnd > appStart) // New slot overlaps existing
+                        (slotStart < appEnd && slotEnd > appStart)
                     );
             });
 
@@ -136,7 +140,7 @@ const PublicBooking = () => {
                 available: !isSlotBooked
             });
 
-            currentTime.setMinutes(currentTime.getMinutes() + 30); // Increment by 30 minutes for next slot
+            currentTime.setMinutes(currentTime.getMinutes() + 30);
         }
 
         return slots;
@@ -144,20 +148,17 @@ const PublicBooking = () => {
 
     const datesToDisplay = useMemo(() => {
         if (!tenant?.businessHours) return [];
-        console.log('Tenant Business Hours:', tenant.businessHours); // Debug log
-
         const dates: Date[] = [];
-        const daysToShow = tenant.businessHours.bookingWindowDays || 30; // Default to 30 if not set
+        const daysToShow = tenant.businessHours.bookingWindowDays || 30;
         let daysFound = 0;
         let currentIter = 0;
-        const maxIter = 60; // Safety break to prevent infinite loops
+        const maxIter = 60;
 
         while (daysFound < daysToShow && currentIter < maxIter) {
             const date = new Date();
             date.setDate(date.getDate() + currentIter);
 
             const hours = getBusinessHoursForDay(date);
-            // Include the date if it's open
             if (hours && !hours.isClosed) {
                 dates.push(date);
                 daysFound++;
@@ -165,7 +166,7 @@ const PublicBooking = () => {
             currentIter++;
         }
         return dates;
-    }, [tenant?.businessHours]);
+    }, [tenant?.businessHours, getBusinessHoursForDay]);
 
     // Auth Logic
     const verifyToken = async () => {
@@ -184,7 +185,7 @@ const PublicBooking = () => {
             setClientPhone(client.phone);
             setIdentificationStep('booking');
         } else {
-            Cookies.remove('barber_client_token'); // Invalid token
+            Cookies.remove('barber_client_token');
             setIdentificationStep('identify');
         }
     };
@@ -200,14 +201,9 @@ const PublicBooking = () => {
         if (!tenant) return;
         setIsAuthenticating(true);
 
-        // Limpar telefone (apenas números)
         const cleanPhone = authPhone.replace(/\D/g, '');
         const cleanCpf = authCpf.replace(/\D/g, '');
 
-
-
-        // If Login mode (not registering), we only send CPF.
-        // If the backend doesn't find it, it returns an error asking for phone (which effectively means "User not found, please register").
         const payload = {
             p_tenant_id: tenant.id,
             p_cpf: cleanCpf || null,
@@ -235,9 +231,8 @@ const PublicBooking = () => {
             setIdentificationStep('booking');
         } else if (response.status === 'ambiguous') {
             alert(response.message || 'Múltiplos clientes encontrados. Por favor, identifique-se pelo CPF ou Telefone.');
-            setAuthName(''); // Clear name to force phone/cpf usage
+            setAuthName('');
         } else {
-            // Handle specific error for missing phone (implies user needs to register)
             if (response.message?.includes('Phone is required')) {
                 alert('CPF não encontrado. Por favor, clique em "Primeiro Acesso?" para se cadastrar.');
             } else {
@@ -255,7 +250,6 @@ const PublicBooking = () => {
         setAuthName('');
         setAuthPhone('');
         setIdentificationStep('identify');
-        // Reset booking form
         setSelectedProfessionalId('');
         setSelectedServiceId('');
         setSelectedDate(new Date());
@@ -306,21 +300,6 @@ const PublicBooking = () => {
         let clientId = identifiedClient?.id;
 
         if (!clientId) {
-            // Create a new client ONLY if not identified
-            // Ideally we should also check if phone exists via RPC, but for now let's rely on the fact 
-            // that if they are strictly new (no token), we create. 
-            // IF the user entered a phone that EXISTS, addClient (if implemented safely) should maybe return existing?
-            // But existing addClient likely just inserts.
-            // Given the requirements, we should trust the identification flow. 
-            // If the user skipped identification (how?), they might create a duplicate. 
-            // But we made identification mandatory (step 'identify').
-            // Wait, if identificationStep is 'booking', identifiedClient MUST be set if we came via token or valid login.
-            // Check: verifyToken sets it. handleIdentification sets it.
-            // So clientId SHOULD be available if we are in this step.
-
-            // BUT, what if the user manually manipulated state? 
-            // Let's assume identifiedClient is source of truth.
-
             const newClientData: Omit<Client, 'id' | 'tenantId'> = {
                 name: clientName,
                 phone: clientPhone,
@@ -329,7 +308,6 @@ const PublicBooking = () => {
                 avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=random`
             };
 
-            // Fallback if somehow identifiedClient is null but we are here (should not happen in normal flow)
             const createdClient = await addClient(newClientData);
             if (!createdClient) {
                 alert('Erro ao cadastrar cliente. Tente novamente.');
@@ -344,7 +322,7 @@ const PublicBooking = () => {
         dateTime.setHours(hour, minute, 0, 0);
 
         const newAppointmentData: Omit<Appointment, 'id' | 'tenantId'> = {
-            clientId: clientId, // Use the resolved clientId
+            clientId: clientId,
             professionalId: selectedProfessionalId,
             serviceId: selectedServiceId,
             date: dateTime.toISOString(),
@@ -352,21 +330,50 @@ const PublicBooking = () => {
             notes: `Agendamento público por ${clientName}`
         };
 
-        const createdAppointment = await addAppointment(newAppointmentData);
+        const result = await addAppointment(newAppointmentData);
 
-        if (createdAppointment) {
+        if (result.success) {
             setIsBookingSuccess(true);
-            // Reset form
             setSelectedProfessionalId('');
             setSelectedServiceId('');
             setSelectedDate(new Date());
             setSelectedTime('');
-            setClientName('');
-            setClientPhone('');
+        } else if (result.conflict || result.error?.includes('Falha ao salvar atendimento')) {
+            // Se houve conflito ou erro de salvamento (que geralmente é conflito no banco), forçamos refresh
+            await refreshData();
+            alert('Sentimos muito, o horário acabou de ser ocupado. Por favor, escolha outro horário.');
         } else {
-            alert('Erro ao agendar serviço. Tente novamente.');
+            alert(result.error || 'Erro ao agendar serviço. Tente novamente.');
         }
         setIsSubmitting(false);
+    };
+
+    const handleCancelAppointment = async (appointmentId: string) => {
+        if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+
+        const token = Cookies.get('barber_client_token');
+        if (!token) return;
+
+        const { data, error } = await supabase.rpc('public_cancel_appointment', {
+            p_appointment_id: appointmentId,
+            p_token: token,
+            p_reason: 'Cancelado pelo cliente via Web'
+        });
+
+        if (error) {
+            console.error('Erro ao cancelar:', error);
+            alert('Erro ao cancelar agendamento.');
+            return;
+        }
+
+        const response = data as { success: boolean, error?: string };
+
+        if (!response.success) {
+            alert(response.error || 'Erro ao cancelar agendamento.');
+        } else {
+            alert('Agendamento cancelado com sucesso!');
+            fetchClientAppointments();
+        }
     };
 
     if (isLoadingTenant || isLoadingData) {
@@ -401,42 +408,59 @@ const PublicBooking = () => {
     return (
         <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background-dark bg-cover bg-center bg-no-repeat p-4" style={{ backgroundImage: `url('${backgroundImageUrl}')` }}>
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
-            <div className="relative z-10 flex w-full max-w-2xl flex-col items-center justify-center rounded-xl bg-card-dark/80 p-8 shadow-glow-primary backdrop-blur-md md:p-12">
-                <div className="mb-8 flex flex-col items-center">
-                    <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-input-dark text-primary overflow-hidden shadow-glow-primary">
+            <div className="relative z-10 flex w-full max-w-2xl flex-col items-center justify-center rounded-xl bg-card-dark/80 p-6 shadow-glow-primary backdrop-blur-md md:p-8">
+                <div className="mb-4 flex flex-col items-center">
+                    <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-input-dark text-primary overflow-hidden shadow-glow-primary">
                         {tenant.theme.logoUrl ? (
                             <img src={tenant.theme.logoUrl} alt="Logo" className="h-full w-full object-cover" />
                         ) : (
-                            <span className="material-symbols-outlined !text-5xl">content_cut</span>
+                            <span className="material-symbols-outlined !text-4xl">content_cut</span>
                         )}
                     </div>
-                    <h1 className="text-3xl font-black uppercase tracking-wider text-text-primary-dark text-center">{tenant.name}</h1>
+                    <h1 className="text-2xl font-black uppercase tracking-wider text-text-primary-dark text-center">{tenant.name}</h1>
                     {tenant.address && (
-                        <p className="text-text-secondary-dark text-sm mt-1 flex items-center gap-1">
+                        <p className="text-text-secondary-dark text-xs mt-1 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">location_on</span>
                             {tenant.address}
                         </p>
                     )}
-                    <p className="text-text-secondary-dark text-sm mt-2">Agende seu horário</p>
+                    <p className="text-text-secondary-dark text-xs mt-1">Agende seu horário</p>
 
-                    <button
-                        onClick={() => setShowHours(!showHours)}
-                        className="mt-3 text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                    >
-                        <span className="material-symbols-outlined text-sm">schedule</span>
-                        {showHours ? 'Ocultar Horários' : 'Ver Horários de Funcionamento'}
-                    </button>
-
-                    {/* Meus Agendamentos Button - Only if identified */}
-                    {identifiedClient && (
+                    <div className="flex gap-3 items-center">
                         <button
-                            onClick={() => setShowAppointments(!showAppointments)}
-                            className="mt-3 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                            onClick={() => setShowHours(!showHours)}
+                            className="mt-2 text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
                         >
-                            <span className="material-symbols-outlined text-sm">history</span>
-                            {showAppointments ? 'Voltar para Agendamento' : 'Meus Agendamentos'}
+                            <span className="material-symbols-outlined text-xs">schedule</span>
+                            {showHours ? 'Ocultar Horários' : 'Ver Horários'}
                         </button>
-                    )}
+
+                        <button
+                            onClick={async () => {
+                                await refreshData();
+                                // Feedback visual simples
+                                const btn = document.getElementById('refresh-btn');
+                                if (btn) btn.classList.add('animate-spin');
+                                setTimeout(() => {
+                                    if (btn) btn.classList.remove('animate-spin');
+                                }, 1000);
+                            }}
+                            className="mt-2 text-[10px] font-bold text-text-secondary-dark hover:text-primary flex items-center gap-1 transition-colors"
+                        >
+                            <span id="refresh-btn" className="material-symbols-outlined text-xs">refresh</span>
+                            Sincronizar
+                        </button>
+
+                        {identifiedClient && (
+                            <button
+                                onClick={() => setShowAppointments(!showAppointments)}
+                                className="mt-2 text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
+                            >
+                                <span className="material-symbols-outlined text-xs">history</span>
+                                {showAppointments ? 'Voltar' : 'Meus Agendamentos'}
+                            </button>
+                        )}
+                    </div>
 
                     {showHours && (
                         <div className="mt-4 w-full bg-input-dark/50 rounded-lg p-4 border border-border-dark animate-in fade-in slide-in-from-top-2">
@@ -448,12 +472,6 @@ const PublicBooking = () => {
                                         monday: 'Segunda', tuesday: 'Terça', wednesday: 'Quarta', thursday: 'Quinta',
                                         friday: 'Sexta', saturday: 'Sábado', sunday: 'Domingo'
                                     }[day];
-
-                                    // Logic inverted: isClosed = false means OPEN. 
-                                    // If hours.isClosed is undefined, assume closed? No, default schema says false.
-                                    // Let's check the logic from BusinessHoursSettings. 
-                                    // In Settings: Checked = !isClosed (Open). 
-                                    // So if !isClosed is true, it is OPEN.
                                     const isOpen = !hours?.isClosed;
 
                                     return (
@@ -472,8 +490,8 @@ const PublicBooking = () => {
 
                 {showAppointments && identifiedClient && (
                     <div className="w-full animate-in fade-in slide-in-from-bottom-4">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-text-primary-dark">Meus Agendamentos</h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-text-primary-dark">Meus Agendamentos</h2>
                             <button
                                 onClick={() => setShowAppointments(false)}
                                 className="text-xs text-primary hover:underline"
@@ -520,11 +538,42 @@ const PublicBooking = () => {
                                                     <span>{app.professional_name}</span>
                                                 </div>
                                             </div>
-                                            {app.total_amount && (
-                                                <div className="font-bold text-text-primary-dark text-sm">
-                                                    R$ {app.total_amount.toFixed(2)}
-                                                </div>
-                                            )}
+                                            <div className="flex flex-col items-end gap-2">
+                                                {!isCompleted && !isCanceled && (
+                                                    <div>
+                                                        {(() => {
+                                                            const cancellationWindow = tenant?.cancellationWindowMinutes || 120;
+                                                            const now = new Date();
+                                                            const minutesUntil = (date.getTime() - now.getTime()) / (1000 * 60);
+
+                                                            if (minutesUntil >= cancellationWindow) {
+                                                                return (
+                                                                    <button
+                                                                        onClick={() => handleCancelAppointment(app.id)}
+                                                                        className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 rounded transition-colors border border-red-500/20"
+                                                                    >
+                                                                        Cancelar
+                                                                    </button>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <span className="text-[10px] text-text-secondary-dark/50 italic text-right block max-w-[100px] leading-tight">
+                                                                        Cancelamento indisponível
+                                                                        <br />
+                                                                        (Min: {cancellationWindow} min)
+                                                                    </span>
+                                                                );
+                                                            }
+                                                        })()}
+                                                    </div>
+                                                )}
+
+                                                {app.total_amount && (
+                                                    <div className="font-bold text-text-primary-dark text-sm">
+                                                        R$ {app.total_amount.toFixed(2)}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -537,80 +586,71 @@ const PublicBooking = () => {
                     </div>
                 )}
 
-                {identificationStep === 'loading' && (
+                {!showAppointments && identificationStep === 'loading' && (
                     <div className="flex flex-col items-center justify-center p-8">
                         <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
                         <p className="mt-4 text-text-secondary-dark">Verificando identificação...</p>
                     </div>
                 )}
 
-                {identificationStep === 'identify' && (
+                {!showAppointments && identificationStep === 'identify' && (
                     <div className="w-full animate-in fade-in slide-in-from-bottom-4">
                         <div className="w-full max-w-sm mx-auto animate-fade-in relative z-10">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-black text-text-primary-dark mb-2">
+                            <div className="text-center mb-6">
+                                <h2 className="text-xl font-black text-text-primary-dark mb-1">
                                     {isRegistering ? 'Crie sua conta' : 'Bem-vindo de volta!'}
                                 </h2>
-                                <p className="text-text-secondary-dark">
+                                <p className="text-xs text-text-secondary-dark">
                                     {isRegistering
                                         ? 'Preencha seus dados para agendar.'
                                         : 'Informe seu CPF para acessar.'}
                                 </p>
                             </div>
 
-                            <form onSubmit={handleIdentification} className="flex flex-col gap-5">
-
-                                {/* CPF Input - Always Visible */}
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">CPF</label>
+                            <form onSubmit={handleIdentification} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-bold text-text-secondary-dark uppercase tracking-wider text-center">CPF</label>
                                     <div className="relative group">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">badge</span>
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors text-lg">badge</span>
                                         <input
                                             type="text"
                                             placeholder="000.000.000-00"
                                             value={authCpf}
                                             onChange={(e) => setAuthCpf(maskCPF(e.target.value))}
                                             maxLength={14}
-                                            className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                            className="h-11 w-full rounded-lg bg-background-dark border-2 border-border-dark pl-11 pr-4 text-base font-bold text-white focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-text-secondary-dark/50 text-center shadow-inner"
                                         />
                                     </div>
-                                    <p className="text-xs text-text-secondary-dark/70 text-center">
-                                        {isRegistering ? 'Usado para identificar você unicamente.' : 'Digite apenas os números.'}
-                                    </p>
                                 </div>
 
-                                {/* Register Fields - Only show if registering */}
                                 {isRegistering && (
-                                    <div className="flex flex-col gap-5 animate-fade-in">
-                                        {/* Name Input */}
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">Nome Completo</label>
+                                    <div className="flex flex-col gap-4 animate-fade-in">
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-xs font-bold text-text-secondary-dark uppercase tracking-wider text-center">Nome Completo</label>
                                             <div className="relative group">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">person</span>
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors text-lg">person</span>
                                                 <input
                                                     type="text"
                                                     placeholder="Seu nome"
                                                     value={authName}
                                                     onChange={(e) => setAuthName(e.target.value)}
-                                                    className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                                    className="h-11 w-full rounded-lg bg-background-dark border-2 border-border-dark pl-11 pr-4 text-base font-bold text-white focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-text-secondary-dark/50 text-center shadow-inner"
                                                 />
                                             </div>
                                         </div>
 
-                                        {/* WhatsApp Input */}
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-sm font-bold text-text-secondary-dark uppercase tracking-wider text-center">WhatsApp</label>
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-xs font-bold text-text-secondary-dark uppercase tracking-wider text-center">WhatsApp</label>
                                             <div className="relative group">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors">phone_iphone</span>
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary-dark group-focus-within:text-primary transition-colors text-lg">phone_iphone</span>
                                                 <input
                                                     type="tel"
                                                     placeholder="34999999999"
                                                     value={authPhone}
                                                     onChange={(e) => setAuthPhone(maskPhone(e.target.value))}
-                                                    className="h-14 w-full rounded-xl bg-background-dark/50 border border-border-dark pl-12 pr-4 text-lg font-medium text-text-primary-dark focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-text-secondary-dark/30 text-center"
+                                                    className="h-11 w-full rounded-lg bg-background-dark border-2 border-border-dark pl-11 pr-4 text-base font-bold text-white focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-text-secondary-dark/50 text-center shadow-inner"
                                                 />
                                             </div>
-                                            <p className="text-xs text-text-secondary-dark/70 text-center">Somente números, ex: 11999999999</p>
                                         </div>
                                     </div>
                                 )}
@@ -618,11 +658,11 @@ const PublicBooking = () => {
                                 <button
                                     type="submit"
                                     disabled={!authCpf || isAuthenticating || (isRegistering && (!authName || !authPhone))}
-                                    className="mt-2 w-full rounded-xl bg-primary py-4 text-lg font-black text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 uppercase tracking-wide"
+                                    className="mt-1 w-full rounded-lg bg-primary py-3 text-base font-black text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 uppercase tracking-wide"
                                 >
                                     {isAuthenticating ? (
                                         <div className="flex items-center justify-center gap-2">
-                                            <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+                                            <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
                                             <span>Processando...</span>
                                         </div>
                                     ) : (
@@ -631,25 +671,23 @@ const PublicBooking = () => {
                                 </button>
                             </form>
 
-                            <div className="mt-8 pt-6 border-t border-border-dark text-center">
+                            <div className="mt-6 pt-4 border-t border-border-dark text-center">
                                 {isRegistering ? (
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setIsRegistering(false);
-                                        }}
-                                        className="text-text-primary-dark hover:text-primary font-medium transition-colors text-sm flex items-center justify-center gap-2 mx-auto"
+                                        onClick={() => setIsRegistering(false)}
+                                        className="text-text-primary-dark hover:text-primary font-medium transition-colors text-xs flex items-center justify-center gap-2 mx-auto"
                                     >
-                                        <span className="material-symbols-outlined text-lg">arrow_back</span>
+                                        <span className="material-symbols-outlined text-base">arrow_back</span>
                                         Já tenho cadastro
                                     </button>
                                 ) : (
-                                    <div className="flex flex-col gap-2">
-                                        <p className="text-text-secondary-dark text-sm">Não tem cadastro?</p>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-text-secondary-dark text-[10px]">Não tem cadastro?</p>
                                         <button
                                             type="button"
                                             onClick={() => setIsRegistering(true)}
-                                            className="text-primary hover:text-primary-light font-bold transition-colors text-base flex items-center justify-center gap-1 mx-auto hover:underline decoration-2 underline-offset-4"
+                                            className="text-primary hover:text-primary-light font-bold transition-colors text-sm flex items-center justify-center gap-1 mx-auto hover:underline decoration-2 underline-offset-4"
                                         >
                                             Primeiro Acesso? Clique aqui
                                         </button>
@@ -660,180 +698,244 @@ const PublicBooking = () => {
                     </div>
                 )}
 
-                {
-                    identificationStep === 'booking' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 w-full">
-                            <div className="flex items-center justify-between mb-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                                        {identifiedClient?.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm text-text-secondary-dark">Identificado como</span>
-                                        <span className="font-bold text-text-primary-dark">{identifiedClient?.name}</span>
-                                    </div>
+                {!showAppointments && identificationStep === 'booking' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 w-full">
+                        <div className="flex items-center justify-between mb-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                            <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                                    {identifiedClient?.name.charAt(0).toUpperCase()}
                                 </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] text-text-secondary-dark leading-none">Identificado como</span>
+                                    <span className="font-bold text-text-primary-dark text-sm">{identifiedClient?.name}</span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="text-[10px] text-red-400 hover:text-red-300 underline"
+                            >
+                                Sair
+                            </button>
+                        </div>
+
+                        {isBookingSuccess ? (
+                            <div className="flex flex-col items-center justify-center p-8 text-center animate-in zoom-in-95 duration-500">
+                                <div className="h-20 w-20 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 mb-4 shadow-glow-primary">
+                                    <span className="material-symbols-outlined text-5xl">check_circle</span>
+                                </div>
+                                <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Agendamento Realizado!</h2>
+                                <p className="text-text-secondary-dark text-sm max-w-xs mb-6">Tudo pronto! Seu horário foi reservado com sucesso.</p>
                                 <button
-                                    onClick={handleLogout}
-                                    className="text-xs text-red-400 hover:text-red-300 underline"
+                                    onClick={() => {
+                                        setIsBookingSuccess(false);
+                                        navigate(`/${tenant?.slug}`);
+                                    }}
+                                    className="px-6 py-3 bg-primary text-background-dark font-black rounded-lg hover:scale-105 transition-transform uppercase tracking-wider shadow-glow-primary text-sm"
                                 >
-                                    Sair / Trocar
+                                    Novo agendamento
                                 </button>
                             </div>
-                            {isBookingSuccess ? (
-                                <div className="text-center text-green-500 text-xl font-bold">
-                                    <span className="material-symbols-outlined !text-6xl text-green-500 mb-4">check_circle</span>
-                                    <p>Agendamento realizado com sucesso!</p>
-                                    <p className="text-base text-text-secondary-dark mt-2">Aguardamos você!</p>
-                                    <button
-                                        onClick={() => setIsBookingSuccess(false)}
-                                        className="mt-6 bg-primary text-background-dark px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"
-                                    >
-                                        Fazer outro agendamento
-                                    </button>
-                                </div>
-                            ) : (
-                                <form className="flex w-full flex-col gap-6" onSubmit={handleBooking}>
-                                    {/* Professional Selection */}
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-text-secondary-dark" htmlFor="professional">Barbeiro</label>
-                                        {tenantProfessionals.length > 0 ? (
-                                            <select
-                                                id="professional"
-                                                className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                                value={selectedProfessionalId}
-                                                onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                                                required
+                        ) : (
+                            <form onSubmit={handleBooking} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] font-black text-text-secondary-dark/60 uppercase tracking-[0.2em] pl-1">Escolha seu Especialista</label>
+
+                                    {tenantProfessionals.length > 0 ? (
+                                        <div className="relative group/carousel px-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentProfessionalIndex(prev => prev > 0 ? prev - 1 : tenantProfessionals.length - 1)}
+                                                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-surface-dark/80 border border-white/5 backdrop-blur-md flex items-center justify-center text-primary shadow-xl hover:bg-primary hover:text-background-dark transition-all duration-300"
                                             >
-                                                <option value="">Selecione um barbeiro</option>
-                                                {tenantProfessionals.map(p => (
-                                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
-                                                Nenhum barbeiro disponível. Por favor, entre em contato com o estabelecimento.
-                                            </p>
-                                        )}
-                                    </div>
+                                                <span className="material-symbols-outlined">chevron_left</span>
+                                            </button>
 
-                                    {/* Service Selection */}
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-text-secondary-dark" htmlFor="service">Serviço</label>
-                                        {tenantServices.length > 0 ? (
-                                            <select
-                                                id="service"
-                                                className="h-14 w-full rounded-lg border-none bg-input-dark p-4 text-base text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                                value={selectedServiceId}
-                                                onChange={(e) => setSelectedServiceId(e.target.value)}
-                                                required
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentProfessionalIndex(prev => prev < tenantProfessionals.length - 1 ? prev + 1 : 0)}
+                                                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-surface-dark/80 border border-white/5 backdrop-blur-md flex items-center justify-center text-primary shadow-xl hover:bg-primary hover:text-background-dark transition-all duration-300"
                                             >
-                                                <option value="">Selecione um serviço</option>
-                                                {tenantServices.map(s => (
-                                                    <option key={s.id} value={s.id}>{s.title} - R$ {s.price.toFixed(2)} ({s.durationMinutes} min)</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
-                                                Nenhum serviço disponível. Por favor, entre em contato com o estabelecimento.
-                                            </p>
-                                        )}
-                                    </div>
+                                                <span className="material-symbols-outlined">chevron_right</span>
+                                            </button>
 
-                                    {/* Date Selection */}
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-text-secondary-dark">Data</label>
-                                        <div className="flex gap-2 overflow-x-auto pb-2">
-                                            {datesToDisplay.map(date => {
-                                                const day = date.toLocaleDateString('pt-BR', { weekday: 'short' });
-                                                const dayNum = date.getDate();
-                                                const month = date.toLocaleDateString('pt-BR', { month: 'short' });
-                                                const isSelected = selectedDate.toDateString() === date.toDateString();
-                                                const businessHours = getBusinessHoursForDay(date);
-                                                const isClosed = businessHours?.isClosed;
+                                            <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-surface-dark/40 to-background-dark/80 backdrop-blur-2xl shadow-2xl relative">
+                                                <div className="flex flex-col sm:flex-row items-center gap-4 p-4 sm:p-5">
+                                                    <div className="relative shrink-0">
+                                                        <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-2xl overflow-hidden ring-3 ring-primary/20 shadow-glow-primary/10">
+                                                            {tenantProfessionals[currentProfessionalIndex]?.avatarUrl ? (
+                                                                <img
+                                                                    src={tenantProfessionals[currentProfessionalIndex].avatarUrl}
+                                                                    alt={tenantProfessionals[currentProfessionalIndex].name}
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            ) : (
+                                                                <div className="h-full w-full bg-background-dark flex items-center justify-center text-primary/40">
+                                                                    <span className="material-symbols-outlined text-4xl">person</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-background-dark border-2 border-background-dark flex items-center justify-center shadow-2xl">
+                                                            <span className="h-3 w-3 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)] animate-pulse"></span>
+                                                        </div>
+                                                    </div>
 
-                                                return (
+                                                    <div className="flex flex-col items-center sm:items-start text-center sm:text-left flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <h4 className="text-lg sm:text-2xl font-black text-white tracking-tight leading-tight">
+                                                                {tenantProfessionals[currentProfessionalIndex]?.name}
+                                                            </h4>
+                                                            <span className="material-symbols-outlined text-primary fill-current text-sm">verified</span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded-full border border-yellow-500/20">
+                                                                <span className="material-symbols-outlined text-yellow-500 text-[10px] fill-current">star</span>
+                                                                <span className="text-xs font-black text-yellow-500">{tenantProfessionals[currentProfessionalIndex]?.rating || '5.0'}</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">
+                                                                {tenantProfessionals[currentProfessionalIndex]?.reviews || '0'} Avaliações
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex flex-wrap justify-center sm:justify-start gap-1.5">
+                                                            {(tenantProfessionals[currentProfessionalIndex]?.specialties || ['Barba', 'Cabelo']).slice(0, 3).map((spec, i) => (
+                                                                <span key={i} className="text-[8px] font-black uppercase tracking-widest bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg">
+                                                                    {spec}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="absolute top-3 right-3 bg-primary text-background-dark h-6 w-6 rounded-full flex items-center justify-center shadow-lg border-2 border-primary shadow-glow-primary">
+                                                    <span className="material-symbols-outlined text-sm font-black">check</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex justify-center gap-1.5 mt-3">
+                                                {tenantProfessionals.map((_, i) => (
                                                     <button
-                                                        key={date.toISOString()}
+                                                        key={i}
                                                         type="button"
-                                                        onClick={() => {
-                                                            if (!isClosed) {
-                                                                setSelectedDate(date);
-                                                                setSelectedTime(''); // Reset time when date changes
-                                                            }
-                                                        }}
-                                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-200 min-w-[80px] ${isSelected
-                                                            ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
-                                                            : isClosed
-                                                                ? 'bg-gray-700 text-gray-400 border-gray-600 cursor-not-allowed opacity-70'
-                                                                : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
-                                                            }`}
-                                                        disabled={isClosed}
-                                                    >
-                                                        <span className="text-xs uppercase">{day.replace('.', '')}</span>
-                                                        <span className="text-xl font-bold">{dayNum}</span>
-                                                        <span className="text-xs uppercase">{month.replace('.', '')}</span>
-                                                        {isClosed && <span className="text-[10px] mt-1 text-red-400">Fechado</span>}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {/* Time Selection */}
-                                    {selectedProfessionalId && selectedServiceId && selectedDate && (
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-sm font-medium text-text-secondary-dark">Horário</label>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                                {generateTimeSlots.length > 0 ? (
-                                                    generateTimeSlots.map(({ time, available }) => (
-                                                        <button
-                                                            key={time}
-                                                            type="button"
-                                                            onClick={() => available && setSelectedTime(time)}
-                                                            disabled={!available}
-                                                            className={`px-4 py-2 rounded-lg border transition-all duration-200 ${!available
-                                                                ? 'bg-input-dark/50 text-text-secondary-dark border-border-dark/50 cursor-not-allowed opacity-50 decoration-slice'
-                                                                : selectedTime === time
-                                                                    ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
-                                                                    : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
-                                                                }`}
-                                                        >
-                                                            {time}
-                                                        </button>
-                                                    ))
-                                                ) : (
-                                                    <p className="col-span-full text-center text-text-secondary-dark py-4">
-                                                        Nenhum horário disponível para esta data e serviço.
-                                                    </p>
-                                                )}
+                                                        onClick={() => setCurrentProfessionalIndex(i)}
+                                                        className={`h-1.5 rounded-full transition-all duration-300 ${i === currentProfessionalIndex ? 'w-8 bg-primary shadow-glow-primary' : 'w-2 bg-white/10 hover:bg-white/30'}`}
+                                                    />
+                                                ))}
                                             </div>
                                         </div>
+                                    ) : (
+                                        <div className="p-8 bg-surface-dark/40 border-2 border-dashed border-white/5 rounded-[2.5rem] text-center text-text-secondary-dark italic">
+                                            Nenhum especialista disponível no momento.
+                                        </div>
                                     )}
+                                </div>
 
-                                    {/* Client Information - Omitted as we have identifiedClient */}
-                                    {/* We can still allow editing email if needed, or confirming details */}
-                                    {/* For now, simplified: we use the identified info. */}
-
-
-
-
-                                    <div className="mt-4 flex flex-col items-center gap-4">
-                                        <button
-                                            className="w-full rounded-lg bg-primary py-4 text-lg font-bold text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] hover:shadow-glow-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-card-dark disabled:opacity-50 disabled:cursor-not-allowed"
-                                            type="submit"
-                                            disabled={isSubmitting || !selectedProfessionalId || !selectedServiceId || !selectedDate || !selectedTime}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-text-secondary-dark" htmlFor="service">Serviço</label>
+                                    {tenantServices.length > 0 ? (
+                                        <select
+                                            id="service"
+                                            className="h-11 w-full rounded-lg border-2 border-border-dark bg-background-dark px-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-inner"
+                                            value={selectedServiceId}
+                                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                                            required
                                         >
-                                            {isSubmitting ? 'Agendando...' : 'Confirmar Agendamento'}
-                                        </button>
+                                            <option value="">Selecione um serviço</option>
+                                            {tenantServices.map(s => (
+                                                <option key={s.id} value={s.id}>{s.title} - R$ {s.price.toFixed(2)}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <p className="text-text-secondary-dark text-sm p-3 bg-input-dark rounded-lg border border-border-dark">
+                                            Nenhum serviço disponível.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-text-secondary-dark">Data</label>
+                                    <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar">
+                                        {datesToDisplay.map(date => {
+                                            const day = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+                                            const dayNum = date.getDate();
+                                            const month = date.toLocaleDateString('pt-BR', { month: 'short' });
+                                            const isSelected = selectedDate.toDateString() === date.toDateString();
+                                            const businessHours = getBusinessHoursForDay(date);
+                                            const isClosed = businessHours?.isClosed;
+
+                                            return (
+                                                <button
+                                                    key={date.toISOString()}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!isClosed) {
+                                                            setSelectedDate(date);
+                                                            setSelectedTime('');
+                                                        }
+                                                    }}
+                                                    className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all duration-200 min-w-[70px] ${isSelected
+                                                        ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
+                                                        : isClosed
+                                                            ? 'bg-gray-700 text-gray-400 border-gray-600 cursor-not-allowed opacity-70'
+                                                            : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
+                                                        }`}
+                                                    disabled={isClosed}
+                                                >
+                                                    <span className="text-[10px] uppercase leading-none">{day.replace('.', '')}</span>
+                                                    <span className="text-lg font-bold my-0.5">{dayNum}</span>
+                                                    <span className="text-[10px] uppercase leading-none">{month.replace('.', '')}</span>
+                                                    {isClosed && <span className="text-[8px] mt-0.5 text-red-400">Fechado</span>}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                </form>
-                            )}
-                        </div>
-                    )
-                }
-            </div >
-        </div >
+                                </div>
+
+                                {selectedProfessionalId && selectedServiceId && selectedDate && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-text-secondary-dark">Horário</label>
+                                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                                            {generateTimeSlots.length > 0 ? (
+                                                generateTimeSlots.map(({ time, available }) => (
+                                                    <button
+                                                        key={time}
+                                                        type="button"
+                                                        onClick={() => available && setSelectedTime(time)}
+                                                        disabled={!available}
+                                                        className={`px-3 py-1.5 rounded-lg border transition-all duration-200 text-sm ${!available
+                                                            ? 'bg-input-dark/50 text-text-secondary-dark border-border-dark/50 cursor-not-allowed opacity-50'
+                                                            : selectedTime === time
+                                                                ? 'bg-primary text-background-dark border-primary shadow-glow-primary'
+                                                                : 'bg-input-dark text-text-primary-dark border-border-dark hover:bg-surface-dark'
+                                                            }`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <p className="col-span-full text-center text-text-secondary-dark py-2 text-xs">
+                                                    Nenhum horário disponível.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-2 flex flex-col items-center">
+                                    <button
+                                        className="w-full rounded-lg bg-primary py-3 text-base font-black text-background-dark shadow-glow-primary transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide"
+                                        type="submit"
+                                        disabled={isSubmitting || !selectedProfessionalId || !selectedServiceId || !selectedDate || !selectedTime}
+                                    >
+                                        {isSubmitting ? 'Agendando...' : 'Confirmar Agendamento'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 };
 

@@ -1,10 +1,18 @@
-// Converte um objeto de camelCase para snake_case
-export const camelToSnake = (obj: Record<string, any>): Record<string, any> => {
+// Converte um objeto de camelCase para snake_case (recursivo)
+export const camelToSnake = (data: any): any => {
+    if (data === null || typeof data !== 'object') {
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => camelToSnake(item));
+    }
+
     const newObj: Record<string, any> = {};
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+    for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            newObj[snakeKey] = obj[key];
+            newObj[snakeKey] = camelToSnake(data[key]);
         }
     }
     return newObj;

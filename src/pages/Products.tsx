@@ -47,7 +47,7 @@ const Products = () => {
     return (
         <div className="flex flex-col gap-8">
             <header className="flex flex-wrap justify-between items-center gap-4">
-                <h1 className="text-text-primary-dark text-4xl font-black">Produtos</h1>
+                <h1 className="text-text-primary-dark text-4xl font-extrabold">Produtos</h1>
                 <button
                     onClick={openNewModal}
                     className="bg-primary text-background-dark px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"

@@ -28,6 +28,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, onClose, on
     const tenantProfessionals = professionals.filter(p => p.tenantId === tenant?.id);
     const tenantServices = services.filter(s => s.tenantId === tenant?.id);
 
+    const isBarber = user?.role === 'barber';
+    const canCheckout = !isBarber || tenant?.allowBarberCheckout !== false;
+
     useEffect(() => {
         const selfProfessional = professionals.find(p => p.userId === user?.id);
 
@@ -55,6 +58,12 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, onClose, on
 
     const handleSubmit = async (e: React.FormEvent) => { // Tornar a função assíncrona
         e.preventDefault();
+
+        if (status === 'Concluído' && !canCheckout) {
+            alert('Atenção: Somente o administrador pode concluir atendimentos e realizar cobranças nesta barbearia.');
+            return;
+        }
+
         const dateTime = new Date(`${date}T${time}`);
 
         const success = await onSave({ // Aguardar o resultado de onSave
@@ -108,7 +117,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, onClose, on
                             className="w-full bg-background-dark border border-border-dark rounded-lg p-3 text-text-primary-dark focus:border-primary focus:outline-none disabled:opacity-50"
                             value={professionalId}
                             onChange={(e) => setProfessionalId(e.target.value)}
-                            disabled={user?.role === 'barber'} // REGRA: Trava o campo para o barbeiro
                         >
                             <option value="">Selecione um profissional</option>
                             {tenantProfessionals.map(professional => (
@@ -166,7 +174,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, onClose, on
                         >
                             <option value="Agendado">Agendado</option>
                             <option value="Confirmado">Confirmado</option>
-                            <option value="Concluído">Concluído</option>
+                            <option value="Concluído" disabled={!canCheckout}>Concluído {!canCheckout && '(Apenas Adm)'}</option>
                             <option value="Cancelado">Cancelado</option>
                         </select>
                     </div>

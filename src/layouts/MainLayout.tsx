@@ -13,7 +13,7 @@ const MainLayout = () => {
 
             <div className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* Mobile Header */}
-                <header className="md:hidden bg-[#181410] border-b border-border-dark p-4 flex items-center justify-between shrink-0">
+                <header className="md:hidden bg-sidebar-dark border-b border-border-dark p-4 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-input-dark text-primary overflow-hidden">
                             {tenant?.theme.logoUrl ? (

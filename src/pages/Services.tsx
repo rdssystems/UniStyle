@@ -47,7 +47,7 @@ const Services = () => {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-text-primary-dark text-4xl font-black">Catálogo de Serviços</h1>
+        <h1 className="text-text-primary-dark text-4xl font-extrabold">Catálogo de Serviços</h1>
         {user?.role === 'admin' && (
           <button
             onClick={openNewModal}

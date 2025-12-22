@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'agenda' | 'clients' | 'professionals' | 'services' | 'products' | 'inventory' | 'sales-reports' | 'settings';
+export type ViewState = 'dashboard' | 'agenda' | 'clients' | 'professionals' | 'services' | 'products' | 'inventory' | 'sales-reports' | 'settings' | 'crm';
 
 export type DayOfWeek = 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
 
@@ -20,12 +20,16 @@ export interface Tenant {
   slug: string;
   theme: {
     primaryColor: string;
-    logoUrl?: string | null; // Pode ser nulo no Supabase
-    backgroundImageUrl?: string | null; // Nova imagem de fundo
+    sidebarColor?: string | null;
+    backgroundColor?: string | null;
+    logoUrl?: string | null;
+    backgroundImageUrl?: string | null;
   };
   businessHours: BusinessHours;
   bookingWindowDays?: number; // Novo campo, opcional pois pode não existir em tenants antigos sem migração
+  cancellationWindowMinutes?: number; // Novo campo para janela de cancelamento
   address?: string; // Novo campo para endereço
+  allowBarberCheckout?: boolean; // Se barbeiros podem concluir atendimentos
 }
 
 export interface User {
@@ -54,6 +58,33 @@ export interface Client {
   mensalistaExpiraEm?: string; // ISO
   // Credit/Debit System
   balance?: number; // saldo_cliente
+
+  // CRM Fields
+  isVip?: boolean;
+  preferences?: {
+    favoriteServices?: string[];
+    preferredProfessionalId?: string;
+    preferredTime?: string;
+    notes?: string;
+  };
+  tags?: CRMTag[];
+}
+
+export interface CRMTag {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+}
+
+export interface ClientCRMNote {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  authorId: string;
+  authorName?: string;
+  content: string;
+  createdAt: string;
 }
 
 export interface Professional {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Client, Professional, Product, Service, Appointment, StockMovement, Transaction, Commission } from '../types';
+import { Client, Professional, Product, Service, Appointment, StockMovement, Transaction, Commission, CRMTag, ClientCRMNote } from '../types';
 import { supabase } from '../integrations/supabase/client';
 import { useTenant } from './TenantContext';
 import { camelToSnake, snakeToCamel } from '../utils/format';
@@ -33,6 +33,15 @@ interface DataContextType {
     updateTransaction: (transaction: Transaction) => Promise<Transaction | null>;
     addCommission: (commission: Omit<Commission, 'id' | 'tenantId'>) => Promise<Commission | null>;
     updateCommission: (commission: Commission) => Promise<Commission | null>;
+    crmTags: CRMTag[];
+    addCRMTag: (tag: Omit<CRMTag, 'id' | 'tenantId'>) => Promise<CRMTag | null>;
+    updateCRMTag: (tag: CRMTag) => Promise<CRMTag | null>;
+    deleteCRMTag: (id: string) => Promise<boolean>;
+    addClientTag: (clientId: string, tagId: string) => Promise<boolean>;
+    removeClientTag: (clientId: string, tagId: string) => Promise<boolean>;
+    addClientNote: (note: Omit<ClientCRMNote, 'id' | 'tenantId' | 'authorId' | 'createdAt'>) => Promise<ClientCRMNote | null>;
+    getClientNotes: (clientId: string) => Promise<ClientCRMNote[]>;
+    refreshData: () => Promise<void>;
     isLoadingData: boolean;
 }
 
@@ -48,6 +57,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [commissions, setCommissions] = useState<Commission[]>([]);
+    const [crmTags, setCrmTags] = useState<CRMTag[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
     const fetchTenantData = async (currentTenantId: string) => {
@@ -97,12 +107,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                 setAppointments(mappedApps as Appointment[]);
             }
             else if (user?.role === 'barber') {
-                const professional = (snakeToCamel(professionalsData) as Professional[]).find(p => p.userId === user.id);
-                if (professional) {
-                    appointmentQuery = appointmentQuery.eq('professional_id', professional.id);
-                } else {
-                    setAppointments([]);
-                }
+                // Barbeiros agora veem todos os agendamentos da barbearia (apenas leitura controlada pelo RLS se necessário,
+                // mas o usuário pediu para eles verem uns aos outros).
+                // Não adicionamos filtro de professional_id aqui para permitir a visão global.
             }
             if (user) {
                 const { data: appointmentsData, error: appointmentsError } = await appointmentQuery;
@@ -122,6 +129,28 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             if (commError) throw commError;
             setCommissions(snakeToCamel(commData) as Commission[]);
 
+            const { data: tagsData, error: tagsError } = await supabase.from('crm_tags').select('*').eq('tenant_id', currentTenantId);
+            if (tagsError) throw tagsError;
+            setCrmTags(snakeToCamel(tagsData) as CRMTag[]);
+
+            // Fetch relations
+            const { data: relationsData, error: relationsError } = await supabase
+                .from('client_tags_relation')
+                .select('client_id, tag_id')
+                .in('client_id', (clientsData || []).map(c => c.id));
+
+            if (!relationsError && relationsData) {
+                // Attach tags to clients locally
+                const mappedClients = (snakeToCamel(clientsData) as Client[]).map(client => {
+                    const clientTagIds = relationsData.filter(r => r.client_id === client.id).map(r => r.tag_id);
+                    const clientTags = (snakeToCamel(tagsData) as CRMTag[]).filter(t => clientTagIds.includes(t.id));
+                    return { ...client, tags: clientTags };
+                });
+                setClients(mappedClients);
+            } else {
+                setClients(snakeToCamel(clientsData) as Client[]);
+            }
+
         } catch (error) {
             console.error('Erro ao buscar dados do tenant:', error);
         } finally {
@@ -135,7 +164,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
             // Realtime Subscription
             const channel = supabase
-                .channel('public:data_changes')
+                .channel(`public:data_changes:${tenant.id}`)
                 .on(
                     'postgres_changes',
                     {
@@ -146,26 +175,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     },
                     (payload) => {
                         console.log('Realtime appointment change:', payload);
-                        const newAppointment = snakeToCamel(payload.new) as Appointment;
 
-                        // Handle INSERT
-                        if (payload.eventType === 'INSERT') {
-                            // If user is barber, only add if it belongs to them
-                            if (user.role === 'barber') {
-                                const selfProfessional = professionals.find(p => p.userId === user.id);
-                                if (selfProfessional && newAppointment.professionalId === selfProfessional.id) {
-                                    setAppointments(prev => [...prev, newAppointment]);
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newAppointment = snakeToCamel(payload.new) as Appointment;
+                            setAppointments(prev => {
+                                const exists = prev.some(a => a.id === newAppointment.id);
+                                if (exists) {
+                                    return prev.map(a => a.id === newAppointment.id ? newAppointment : a);
                                 }
-                            } else {
-                                // Admin sees all
-                                setAppointments(prev => [...prev, newAppointment]);
-                            }
+                                return [...prev, newAppointment];
+                            });
                         }
-                        // Handle UPDATE
-                        else if (payload.eventType === 'UPDATE') {
-                            setAppointments(prev => prev.map(a => a.id === newAppointment.id ? newAppointment : a));
-                        }
-                        // Handle DELETE
                         else if (payload.eventType === 'DELETE') {
                             const deletedId = payload.old.id;
                             setAppointments(prev => prev.filter(a => a.id !== deletedId));
@@ -182,12 +202,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     },
                     (payload) => {
                         console.log('Realtime client change:', payload);
-                        const newClient = snakeToCamel(payload.new) as Client;
-
-                        if (payload.eventType === 'INSERT') {
-                            setClients(prev => [...prev, newClient]);
-                        } else if (payload.eventType === 'UPDATE') {
-                            setClients(prev => prev.map(c => c.id === newClient.id ? newClient : c));
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newClient = snakeToCamel(payload.new) as Client;
+                            setClients(prev => {
+                                const exists = prev.some(c => c.id === newClient.id);
+                                if (exists) {
+                                    return prev.map(c => c.id === newClient.id ? newClient : c);
+                                }
+                                return [...prev, newClient];
+                            });
                         } else if (payload.eventType === 'DELETE') {
                             setClients(prev => prev.filter(c => c.id !== payload.old.id));
                         }
@@ -195,17 +218,49 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                 )
                 .on(
                     'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'stock_movements',
-                        filter: `tenant_id=eq.${tenant.id}`,
-                    },
+                    { event: '*', schema: 'public', table: 'products', filter: `tenant_id=eq.${tenant.id}` },
                     (payload) => {
-                        console.log('Realtime stock movement:', payload);
-                        const newMovement = snakeToCamel(payload.new) as StockMovement;
-                        if (payload.eventType === 'INSERT') {
-                            setStockMovements(prev => [newMovement, ...prev]);
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newProduct = snakeToCamel(payload.new) as Product;
+                            setProducts(prev => {
+                                const exists = prev.some(p => p.id === newProduct.id);
+                                if (exists) return prev.map(p => p.id === newProduct.id ? newProduct : p);
+                                return [...prev, newProduct];
+                            });
+                        } else if (payload.eventType === 'DELETE') {
+                            setProducts(prev => prev.filter(p => p.id !== payload.old.id));
+                        }
+                    }
+                )
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'services', filter: `tenant_id=eq.${tenant.id}` },
+                    (payload) => {
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newService = snakeToCamel(payload.new) as Service;
+                            setServices(prev => {
+                                const exists = prev.some(s => s.id === newService.id);
+                                if (exists) return prev.map(s => s.id === newService.id ? newService : s);
+                                return [...prev, newService];
+                            });
+                        } else if (payload.eventType === 'DELETE') {
+                            setServices(prev => prev.filter(s => s.id !== payload.old.id));
+                        }
+                    }
+                )
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'professionals', filter: `tenant_id=eq.${tenant.id}` },
+                    (payload) => {
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newProf = snakeToCamel(payload.new) as Professional;
+                            setProfessionals(prev => {
+                                const exists = prev.some(p => p.id === newProf.id);
+                                if (exists) return prev.map(p => p.id === newProf.id ? newProf : p);
+                                return [...prev, newProf];
+                            });
+                        } else if (payload.eventType === 'DELETE') {
+                            setProfessionals(prev => prev.filter(p => p.id !== payload.old.id));
                         }
                     }
                 )
@@ -213,55 +268,24 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'transactions', filter: `tenant_id=eq.${tenant.id}` },
                     (payload) => {
-                        const newTrans = snakeToCamel(payload.new) as Transaction;
-                        if (payload.eventType === 'INSERT') setTransactions(prev => [newTrans, ...prev]);
-                        else if (payload.eventType === 'UPDATE') setTransactions(prev => prev.map(t => t.id === newTrans.id ? newTrans : t));
-                        else if (payload.eventType === 'DELETE') setTransactions(prev => prev.filter(t => t.id !== payload.old.id));
+                        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                            const newTrans = snakeToCamel(payload.new) as Transaction;
+                            setTransactions(prev => {
+                                const exists = prev.some(t => t.id === newTrans.id);
+                                if (exists) return prev.map(t => t.id === newTrans.id ? newTrans : t);
+                                return [newTrans, ...prev];
+                            });
+                        } else if (payload.eventType === 'DELETE') {
+                            setTransactions(prev => prev.filter(t => t.id !== payload.old.id));
+                        }
                     }
                 )
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'commissions', filter: `tenant_id=eq.${tenant.id}` },
-                    (payload) => {
-                        const newComm = snakeToCamel(payload.new) as Commission;
-                        if (payload.eventType === 'INSERT') setCommissions(prev => [newComm, ...prev]);
-                        else if (payload.eventType === 'UPDATE') setCommissions(prev => prev.map(c => c.id === newComm.id ? newComm : c));
-                        else if (payload.eventType === 'DELETE') setCommissions(prev => prev.filter(c => c.id !== payload.old.id));
-                    }
-                )
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'products', filter: `tenant_id=eq.${tenant.id}` },
-                    (payload) => {
-                        const newProduct = snakeToCamel(payload.new) as Product;
-                        if (payload.eventType === 'INSERT') setProducts(prev => [...prev, newProduct]);
-                        else if (payload.eventType === 'UPDATE') setProducts(prev => prev.map(p => p.id === newProduct.id ? newProduct : p));
-                        else if (payload.eventType === 'DELETE') setProducts(prev => prev.filter(p => p.id !== payload.old.id));
-                    }
-                )
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'services', filter: `tenant_id=eq.${tenant.id}` },
-                    (payload) => {
-                        const newService = snakeToCamel(payload.new) as Service;
-                        if (payload.eventType === 'INSERT') setServices(prev => [...prev, newService]);
-                        else if (payload.eventType === 'UPDATE') setServices(prev => prev.map(s => s.id === newService.id ? newService : s));
-                        else if (payload.eventType === 'DELETE') setServices(prev => prev.filter(s => s.id !== payload.old.id));
-                    }
-                )
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'professionals', filter: `tenant_id=eq.${tenant.id}` },
-                    (payload) => {
-                        const newProf = snakeToCamel(payload.new) as Professional;
-                        if (payload.eventType === 'INSERT') setProfessionals(prev => [...prev, newProf]);
-                        else if (payload.eventType === 'UPDATE') setProfessionals(prev => prev.map(p => p.id === newProf.id ? newProf : p));
-                        else if (payload.eventType === 'DELETE') setProfessionals(prev => prev.filter(p => p.id !== payload.old.id));
-                    }
-                )
-                .subscribe();
+                .subscribe((status) => {
+                    console.log(`[Realtime] Escutando mudanças para o tenant: ${tenant.id}. Status:`, status);
+                });
 
             return () => {
+                console.log('[Realtime] Unsubscribing...');
                 supabase.removeChannel(channel);
             };
 
@@ -286,7 +310,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateItem = async <T extends { id: string, tenantId: string }>(tableName: string, item: T, currentTenantId: string): Promise<T | null> => {
-        const { id, ...itemData } = item;
+        const { id, tenantId, ...itemData } = item as any;
         const { data, error } = await supabase.from(tableName).update(camelToSnake(itemData)).eq('id', id).eq('tenant_id', currentTenantId).select().single();
         if (error) { console.error(`Erro ao atualizar ${tableName}:`, error.message); return null; }
         return snakeToCamel(data) as T;
@@ -444,13 +468,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     const addAppointment = async (appointment: Omit<Appointment, 'id' | 'tenantId'>): Promise<{ success: boolean; error?: string; conflict?: boolean }> => {
         console.log('addAppointment chamado com:', appointment);
-        if (!tenant?.id || !user) {
-            console.error('Tenant ou usuário não encontrado');
-            return { success: false, error: 'Tenant ou usuário não encontrado' };
+        if (!tenant?.id) {
+            console.error('Tenant não encontrado');
+            return { success: false, error: 'Tenant não encontrado' };
         }
-        const selfProfessional = professionals.find(p => p.userId === user.id);
-        if (user.role === 'barber' && (!selfProfessional || appointment.professionalId !== selfProfessional.id)) {
-            return { success: false, error: 'Você só pode criar agendamentos para si mesmo.' };
+
+        // Validamos se o usuário tem permissão para o tenant, mas permitimos que barbeiros agendem para colegas
+        if (user) {
+            if (user.tenantId !== tenant.id) {
+                return { success: false, error: 'Acesso negado ao tenant.' };
+            }
         }
 
         if (checkAppointmentOverlap(appointment, appointments, services)) {
@@ -465,15 +492,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             return { success: true };
         } else {
             console.error('Falha ao criar agendamento no banco');
-            return { success: false, error: 'Falha ao criar agendamento' };
+            return { success: false, error: 'Falha ao salvar atendimento. Por favor, atualize a página e verifique o horário desejado.' };
         }
     };
 
     const updateAppointment = async (appointment: Appointment): Promise<{ success: boolean; error?: string; conflict?: boolean }> => {
         if (!tenant?.id || !user) return { success: false, error: 'Tenant ou usuário não encontrado' };
-        const selfProfessional = professionals.find(p => p.userId === user.id);
-        if (user.role === 'barber' && (!selfProfessional || appointment.professionalId !== selfProfessional.id)) {
-            return { success: false, error: 'Você só pode atualizar seus próprios agendamentos.' };
+
+        // Bloqueio de segurança por tenant
+        if (user.tenantId !== tenant.id) {
+            return { success: false, error: 'Acesso negado ao tenant.' };
         }
 
         // Encontra o agendamento original para comparar
@@ -489,20 +517,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             return { success: false, conflict: true };
         }
 
-        // Incluir totalAmount e productsSold na atualização
-        const { totalAmount, productsSold, ...restOfAppointment } = appointment;
-        const updatedData = {
-            ...restOfAppointment,
-            totalAmount: totalAmount !== undefined ? totalAmount : null, // Garante que seja null se não definido
-            productsSold: productsSold !== undefined ? productsSold : null, // Garante que seja null se não definido
-        };
+        // Limpar campos protegidos/gerados automaticamente
+        const { tenantId, createdAt, ...updatePayload } = appointment as any;
 
-        const updatedAppointment = await updateItem<Appointment>('appointments', updatedData as Appointment, tenant.id);
+        const updatedAppointment = await updateItem<Appointment>('appointments', updatePayload as Appointment, tenant.id);
         if (updatedAppointment) {
             setAppointments(prev => prev.map(a => a.id === updatedAppointment.id ? updatedAppointment : a));
             return { success: true };
         }
-        return { success: false, error: 'Falha ao atualizar agendamento' };
+        return { success: false, error: 'Falha ao atualizar agendamento. Por favor, atualize a página e tente novamente.' };
     };
 
     const deleteAppointment = async (id: string) => {
@@ -591,6 +614,76 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         return updated;
     };
 
+    // --- CRM ---
+    const addCRMTag = async (tag: Omit<CRMTag, 'id' | 'tenantId'>) => {
+        if (!tenant?.id) return null;
+        const newTag = await createItem<CRMTag>('crm_tags', tag, tenant.id);
+        if (newTag) setCrmTags(prev => [...prev, newTag]);
+        return newTag;
+    };
+
+    const updateCRMTag = async (tag: CRMTag) => {
+        if (!tenant?.id) return null;
+        const updated = await updateItem<CRMTag>('crm_tags', tag, tenant.id);
+        if (updated) setCrmTags(prev => prev.map(t => t.id === updated.id ? updated : t));
+        return updated;
+    };
+
+    const deleteCRMTag = async (id: string) => {
+        if (!tenant?.id) return false;
+        const success = await deleteItem('crm_tags', id, tenant.id);
+        if (success) setCrmTags(prev => prev.filter(t => t.id !== id));
+        return success;
+    };
+
+    const addClientTag = async (clientId: string, tagId: string) => {
+        const { error } = await supabase.from('client_tags_relation').insert({ client_id: clientId, tag_id: tagId });
+        if (error) return false;
+        const tag = crmTags.find(t => t.id === tagId);
+        if (tag) {
+            setClients(prev => prev.map(c => c.id === clientId ? { ...c, tags: [...(c.tags || []), tag] } : c));
+        }
+        return true;
+    };
+
+    const removeClientTag = async (clientId: string, tagId: string) => {
+        const { error } = await supabase.from('client_tags_relation').delete().eq('client_id', clientId).eq('tag_id', tagId);
+        if (error) return false;
+        setClients(prev => prev.map(c => c.id === clientId ? { ...c, tags: (c.tags || []).filter(t => t.id !== tagId) } : c));
+        return true;
+    };
+
+    const addClientNote = async (note: Omit<ClientCRMNote, 'id' | 'tenantId' | 'authorId' | 'createdAt'>) => {
+        if (!tenant?.id || !user) return null;
+        const noteWithMeta = { ...note, tenantId: tenant.id, authorId: user.id };
+        const { data, error } = await supabase.from('client_crm_notes').insert(camelToSnake(noteWithMeta)).select().single();
+        if (error) return null;
+        const newNote = snakeToCamel(data) as ClientCRMNote;
+        return { ...newNote, authorName: user.name };
+    };
+
+    const getClientNotes = async (clientId: string) => {
+        if (!tenant?.id) return [];
+        // Note: Joining with profiles to get author name
+        const { data, error } = await supabase
+            .from('client_crm_notes')
+            .select('*, author:profiles(first_name, last_name)')
+            .eq('client_id', clientId)
+            .order('created_at', { ascending: false });
+
+        if (error) return [];
+        return (data || []).map(n => ({
+            ...snakeToCamel(n),
+            authorName: n.author ? `${n.author.first_name || ''} ${n.author.last_name || ''}`.trim() : 'Sistema'
+        })) as ClientCRMNote[];
+    };
+
+    const refreshData = async () => {
+        if (tenant?.id) {
+            await fetchTenantData(tenant.id);
+        }
+    };
+
     return (
         <DataContext.Provider value={{
             clients, professionals, products, services, appointments,
@@ -602,6 +695,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             stockMovements, addStockMovement,
             transactions, addTransaction, updateTransaction,
             commissions, addCommission, updateCommission,
+            crmTags, addCRMTag, updateCRMTag, deleteCRMTag,
+            addClientTag, removeClientTag,
+            addClientNote, getClientNotes,
+            refreshData,
             isLoadingData
         }}>
             {children}

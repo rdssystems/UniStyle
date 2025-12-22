@@ -16,6 +16,7 @@ import SalesReports from './pages/SalesReports';
 import Settings from './pages/Settings';
 import Financials from './pages/Financials';
 import BarberStats from './pages/BarberStats';
+import CRM from './pages/CRM';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicBooking from './pages/PublicBooking';
 
@@ -40,6 +41,7 @@ const App = () => {
                             <Route path="products" element={<Products />} />
                             <Route path="inventory" element={<Inventory />} />
                             <Route path="sales-reports" element={<SalesReports />} />
+                            <Route path="crm" element={<CRM />} />
                             <Route path="stats" element={<BarberStats />} />
                             <Route path="settings" element={<Settings />} />
                         </Route>
