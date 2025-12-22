@@ -26,18 +26,28 @@ const Login = () => {
     }
 
     return (
-        <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background-dark bg-cover bg-center bg-no-repeat p-4" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCG_oTiQQfPMIcDpRhMvtR9Fgg25nGTX94ZkOYStzVYYXRtGRXvMCtPEfCwuq0Ww5IUpw1uysJhOo3BhC1Cy0RjeoOUDH37XxU-Qg6kX1RnlS9tL4CY5x52yAuCGfGz7q_GNjdUHpRBykgYbWCaf9Cbodw5IOEXWK5FrhZuVg_AOpg71W_ikOsMIpeg7kDZVCJubkJrKWN8kKXXH43vuHMqZ3-FAHX2kW6TaY-czTt0fbBEyV-r35-IaAdm5OCryTLmx7EMu7eLdKs')" }}>
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
-            <div className="relative z-10 flex w-full max-w-md flex-col items-center justify-center rounded-xl bg-card-dark/80 p-8 shadow-glow-primary backdrop-blur-md md:p-12">
+        <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background-dark bg-cover bg-center bg-no-repeat p-4" style={{ backgroundImage: "url('/img_fundo_login.png')" }}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-md"></div>
+            <div className="relative z-10 flex w-full max-w-md flex-col items-center justify-center rounded-2xl bg-[#1a1614]/90 p-8 shadow-2xl border border-white/10 backdrop-blur-sm md:p-12">
                 <div className="mb-8 flex flex-col items-center">
-                    <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-input-dark text-primary">
-                        <span className="material-symbols-outlined !text-5xl">content_cut</span>
+                    <div className="mb-6 flex flex-col items-center">
+                        <div className="relative group">
+                            {/* Decorative Glow behind the logo */}
+                            <div className="absolute -inset-4 bg-[#c16934]/20 rounded-full blur-2xl opacity-50 group-hover:opacity-80 transition-opacity duration-500"></div>
+
+                            {/* Glass Container for Logo */}
+                            <div className="relative h-28 w-48 rounded-2xl bg-white/95 p-4 shadow-[0_0_30px_rgba(193,105,52,0.15)] flex items-center justify-center transition-transform duration-500 hover:scale-105 border border-white/20">
+                                <img src="/logo-vizzu.png" alt="Vizzu Logo" className="h-full w-full object-contain" />
+                            </div>
+                        </div>
+                        <div className="mt-4 text-center">
+                            <p className="text-[13px] font-black uppercase tracking-[0.5em] text-[#c16934] drop-shadow-sm">Gestão & Estilo</p>
+                        </div>
                     </div>
-                    <h1 className="text-3xl font-extrabold uppercase tracking-wider text-text-primary-dark">UniStyle</h1>
                 </div>
                 <div className="w-full">
-                    <h2 className="pb-2 text-center text-3xl font-bold text-text-primary-dark">Bem-vindo de volta</h2>
-                    <p className="pb-8 text-center text-base text-text-secondary-dark">Acesse sua conta para continuar</p>
+                    <h2 className="pb-2 text-center text-2xl font-bold text-white">Bem-vindo de volta</h2>
+                    <p className="pb-8 text-center text-sm text-white/50">Acesse sua conta para continuar</p>
                 </div>
                 {error && <p className="text-red-500 text-center mb-4">{error}</p>}
                 <div className="w-full">
@@ -49,15 +59,14 @@ const Login = () => {
                             variables: {
                                 default: {
                                     colors: {
-                                        brand: 'hsl(244 75% 60%)', // Cor primária do tema (primary) - Indigo Unisex
-                                        brandAccent: 'hsl(244 75% 50%)', // Um pouco mais escuro para hover/active
-                                        inputBackground: 'hsl(240 4% 11%)', // input-dark
-                                        inputBorder: 'hsl(240 3% 20%)', // border-dark
-                                        inputPlaceholder: 'hsl(240 3% 53%)', // text-secondary-dark
-                                        inputText: 'hsl(240 3% 92%)', // text-primary-dark
-                                        messageBackground: 'hsl(240 4% 11%)', // card-dark
-                                        messageText: 'hsl(240 3% 92%)', // text-primary-dark
-                                        messageActionText: 'hsl(244 75% 60%)', // primary
+                                        brand: '#c16934', // Warm Rust
+                                        brandAccent: '#a35520', // Darker Rust
+                                        inputBackground: '#251c18', // Deep brown
+                                        inputBorder: '#3d2e27', // Lighter brown border
+                                        inputPlaceholder: '#6e5a51', // Muted brown
+                                        inputText: '#f3f1f0', // Off-white
+                                        messageBackground: '#251c18',
+                                        messageText: '#f3f1f0',
                                     },
                                 },
                             },
@@ -69,29 +78,18 @@ const Login = () => {
                                 sign_in: {
                                     email_label: 'Seu Email',
                                     password_label: 'Sua Senha',
-                                    email_input_placeholder: 'seuemail@exemplo.com',
+                                    email_input_placeholder: 'exemplo@vizzu.com',
                                     password_input_placeholder: 'Sua senha',
-                                    button_label: 'Entrar',
+                                    button_label: 'Entrar na Plataforma',
                                     social_provider_text: 'Ou entre com',
                                     link_text: 'Já tem uma conta? Faça login',
                                 },
-                                common: {
-                                    button_label: 'Confirmar',
-                                    email_label: 'Email',
-                                    password_label: 'Senha',
-                                    email_input_placeholder: 'Seu email',
-                                    password_input_placeholder: 'Sua senha',
-                                    forgotten_password_text: 'Esqueceu sua senha?',
-                                    link_text: 'Não tem uma conta? Cadastre-se',
-                                    loading_button_text: 'Carregando...',
-                                },
                             },
                         }}
-                        onError={handleAuthError}
                     />
                 </div>
-                <div className="mt-6 text-center text-sm text-text-secondary-dark">
-                    <Link to="/signup" className="text-primary hover:underline">Não tem uma conta? Cadastre-se</Link>
+                <div className="mt-8 text-center">
+                    <Link to="/signup" className="text-white/60 text-sm hover:text-[#c16934] transition-colors">Ainda não tem acesso? <span className="font-bold underline">Cadastre-se</span></Link>
                 </div>
             </div>
         </div>

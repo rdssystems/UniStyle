@@ -19,10 +19,10 @@ const MainLayout = () => {
                             {tenant?.theme.logoUrl ? (
                                 <img src={tenant.theme.logoUrl} alt="Logo" className="h-full w-full object-cover" />
                             ) : (
-                                <span className="material-symbols-outlined text-sm">content_cut</span>
+                                <img src="/logo-vizzu.png" alt="Vizzu Logo" className="h-full w-full object-contain p-0.5" />
                             )}
                         </div>
-                        <span className="font-bold text-text-primary-dark uppercase tracking-wider">{tenant?.name || 'UniStyle'}</span>
+                        <span className="font-bold text-text-primary-dark uppercase tracking-wider">{tenant?.name || 'Vizzu'}</span>
                     </div>
                     <button
                         onClick={() => setIsSidebarOpen(true)}

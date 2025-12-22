@@ -463,7 +463,7 @@ const CRMProfileModal = ({ clientId, onClose }: CRMProfileModalProps) => {
                 <div className="p-4 bg-background-dark shrink-0 border-t border-border-dark flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 text-primary">
                         <span className="material-symbols-outlined text-sm">lightbulb</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest italic">Insight CRM UniStyle</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest italic">Insight CRM Vizzu</span>
                     </div>
                     {stats && stats.lastVisit && (
                         <span className="text-[10px] font-bold text-text-secondary-dark uppercase">

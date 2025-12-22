@@ -161,18 +161,10 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             document.documentElement.style.setProperty('--sidebar-color', '#1E1E1E');
         }
 
-        if (tenant?.theme.backgroundColor) {
-            document.documentElement.style.setProperty('--background-dark-color', tenant.theme.backgroundColor);
-            // Derive surface color (cards) from background (slightly lighter)
-            // For now just keep it same or let user define? User didn't ask for card color.
-            // I'll set surface-dark to be the same as background or slightly different.
-            // Let's use the background color for now to see.
-            document.documentElement.style.setProperty('--surface-dark-color', tenant.theme.backgroundColor);
-        } else {
-            document.documentElement.style.setProperty('--background-dark-color', '#121212');
-            document.documentElement.style.setProperty('--surface-dark-color', '#1E1E1E');
-        }
-    }, [tenant?.theme.primaryColor, tenant?.theme.sidebarColor, tenant?.theme.backgroundColor]);
+        // Fundo fixo conforme solicitado (rgb 29 27 27)
+        document.documentElement.style.setProperty('--background-dark-color', '#1D1B1B');
+        document.documentElement.style.setProperty('--surface-dark-color', '#1D1B1B');
+    }, [tenant?.theme.primaryColor, tenant?.theme.sidebarColor]);
 
     useEffect(() => {
         // Define o estado inicial como carregando. O listener irá resolver isso.

@@ -10,7 +10,6 @@ const Settings = () => {
     const [name, setName] = useState('');
     const [primaryColor, setPrimaryColor] = useState('');
     const [sidebarColor, setSidebarColor] = useState('');
-    const [backgroundColor, setBackgroundColor] = useState('');
     const [logoUrl, setLogoUrl] = useState('');
     const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
     const [address, setAddress] = useState('');
@@ -32,7 +31,6 @@ const Settings = () => {
             setName(tenant.name);
             setPrimaryColor(tenant.theme.primaryColor);
             setSidebarColor(tenant.theme.sidebarColor || '#1E1E1E');
-            setBackgroundColor(tenant.theme.backgroundColor || '#121212');
             setLogoUrl(tenant.theme.logoUrl || '');
             setBackgroundImageUrl(tenant.theme.backgroundImageUrl || '');
             setAddress(tenant.address || '');
@@ -160,7 +158,7 @@ const Settings = () => {
             setIsSaving(true);
             const { error } = await updateTenant({
                 name,
-                theme: { ...tenant.theme, primaryColor, sidebarColor, backgroundColor, logoUrl, backgroundImageUrl },
+                theme: { ...tenant.theme, primaryColor, sidebarColor, logoUrl, backgroundImageUrl },
                 address,
                 cancellationWindowMinutes,
                 allowBarberCheckout,
@@ -310,7 +308,7 @@ const Settings = () => {
                                         />
                                     </div>
 
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div className="flex flex-col gap-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary-dark text-center">Primária</label>
                                             <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-12 w-full rounded-xl bg-background-dark border border-border-dark p-1 cursor-pointer" />
@@ -318,10 +316,6 @@ const Settings = () => {
                                         <div className="flex flex-col gap-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary-dark text-center">Sidebar</label>
                                             <input type="color" value={sidebarColor} onChange={(e) => setSidebarColor(e.target.value)} className="h-12 w-full rounded-xl bg-background-dark border border-border-dark p-1 cursor-pointer" />
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary-dark text-center">Fundo</label>
-                                            <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="h-12 w-full rounded-xl bg-background-dark border border-border-dark p-1 cursor-pointer" />
                                         </div>
                                     </div>
                                 </div>
